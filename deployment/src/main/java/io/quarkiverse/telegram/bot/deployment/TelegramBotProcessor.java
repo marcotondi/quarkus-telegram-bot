@@ -215,16 +215,18 @@ class TelegramBotProcessor {
 
         RuntimeValue<UpdateDispatcher> dispatcher = recorder.createDispatcher(descriptors);
 
-        // Register Webhook route on Vert.x HTTP with bodyHandler
-        routes.produce(RouteBuildItem.builder()
-                .orderedRoute(buildTimeConfig.webhook().path(), 100)
-                .handler(bodyHandler.getHandler())
-                .build());
+        // Register Webhook route on Vert.x HTTP with bodyHandler if enabled
+        if (buildTimeConfig.webhook().enabled()) {
+            routes.produce(RouteBuildItem.builder()
+                    .orderedRoute(buildTimeConfig.webhook().path(), 100)
+                    .handler(bodyHandler.getHandler())
+                    .build());
 
-        routes.produce(RouteBuildItem.builder()
-                .orderedRoute(buildTimeConfig.webhook().path(), 200)
-                .handler(recorder.createWebhookHandler(dispatcher))
-                .build());
+            routes.produce(RouteBuildItem.builder()
+                    .orderedRoute(buildTimeConfig.webhook().path(), 200)
+                    .handler(recorder.createWebhookHandler(dispatcher))
+                    .build());
+        }
 
         // Initialize transports (polling or webhook)
         recorder.initTransports(dispatcher, launchMode.getLaunchMode(), botCommands);
