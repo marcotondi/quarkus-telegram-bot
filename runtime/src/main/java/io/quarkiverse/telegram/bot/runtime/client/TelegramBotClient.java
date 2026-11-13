@@ -1,25 +1,36 @@
 package io.quarkiverse.telegram.bot.runtime.client;
 
 import java.util.List;
+import java.util.Map;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import org.eclipse.microprofile.rest.client.inject.RestClient;
+import org.jboss.resteasy.reactive.client.api.ClientMultipartForm;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.quarkiverse.telegram.bot.runtime.config.TelegramBotConfig;
 import io.quarkiverse.telegram.bot.runtime.model.BotCommand;
 import io.quarkiverse.telegram.bot.runtime.model.GetUpdatesRequest;
+import io.quarkiverse.telegram.bot.runtime.model.InputFile;
+import io.quarkiverse.telegram.bot.runtime.model.InputMedia;
 import io.quarkiverse.telegram.bot.runtime.model.Message;
+import io.quarkiverse.telegram.bot.runtime.model.ReplyMarkup;
+import io.quarkiverse.telegram.bot.runtime.model.SendAudioJsonRequest;
+import io.quarkiverse.telegram.bot.runtime.model.SendDocumentJsonRequest;
+import io.quarkiverse.telegram.bot.runtime.model.SendMediaGroupJsonRequest;
 import io.quarkiverse.telegram.bot.runtime.model.SendMessage;
+import io.quarkiverse.telegram.bot.runtime.model.SendPhotoJsonRequest;
 import io.quarkiverse.telegram.bot.runtime.model.SetMyCommandsRequest;
 import io.quarkiverse.telegram.bot.runtime.model.SetWebhookRequest;
 import io.quarkiverse.telegram.bot.runtime.model.TelegramResponse;
 import io.quarkiverse.telegram.bot.runtime.model.Update;
 import io.quarkiverse.telegram.bot.runtime.model.User;
 import io.smallrye.mutiny.Uni;
+import io.vertx.core.buffer.Buffer;
 
 @ApplicationScoped
 public class TelegramBotClient {
@@ -72,6 +83,158 @@ public class TelegramBotClient {
 
     public Uni<Boolean> setMyCommands(List<BotCommand> commands) {
         return api.setMyCommands(token(), new SetMyCommandsRequest(commands)).map(TelegramResponse::result);
+    }
+
+    // --- sendPhoto ---
+
+    public Uni<Message> sendPhoto(long chatId, InputFile photo) {
+        return sendPhoto(chatId, photo, null, null);
+    }
+
+    public Uni<Message> sendPhoto(long chatId, InputFile photo, String caption) {
+        return sendPhoto(chatId, photo, caption, null);
+    }
+
+    public Uni<Message> sendPhoto(long chatId, InputFile photo, String caption, ReplyMarkup markup) {
+        return switch (photo) {
+            case InputFile.FileId(var id) -> api.sendPhotoJson(
+                    token(), new SendPhotoJsonRequest(chatId, id, caption, markup)).map(TelegramResponse::result);
+
+            case InputFile.Url(var url) -> api.sendPhotoJson(
+                    token(), new SendPhotoJsonRequest(chatId, url, caption, markup)).map(TelegramResponse::result);
+
+            case InputFile.BinaryPath(var path, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("photo", fileName, path.toAbsolutePath().toString(), contentType);
+                yield api.sendPhotoMultipart(token(), form).map(TelegramResponse::result);
+            }
+
+            case InputFile.BinaryBytes(var bytes, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("photo", fileName, Buffer.buffer(bytes), contentType);
+                yield api.sendPhotoMultipart(token(), form).map(TelegramResponse::result);
+            }
+        };
+    }
+
+    // --- sendDocument ---
+
+    public Uni<Message> sendDocument(long chatId, InputFile document) {
+        return sendDocument(chatId, document, null, null);
+    }
+
+    public Uni<Message> sendDocument(long chatId, InputFile document, String caption) {
+        return sendDocument(chatId, document, caption, null);
+    }
+
+    public Uni<Message> sendDocument(long chatId, InputFile document, String caption, ReplyMarkup markup) {
+        return switch (document) {
+            case InputFile.FileId(var id) -> api.sendDocumentJson(
+                    token(), new SendDocumentJsonRequest(chatId, id, caption, markup)).map(TelegramResponse::result);
+
+            case InputFile.Url(var url) -> api.sendDocumentJson(
+                    token(), new SendDocumentJsonRequest(chatId, url, caption, markup)).map(TelegramResponse::result);
+
+            case InputFile.BinaryPath(var path, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("document", fileName, path.toAbsolutePath().toString(), contentType);
+                yield api.sendDocumentMultipart(token(), form).map(TelegramResponse::result);
+            }
+
+            case InputFile.BinaryBytes(var bytes, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("document", fileName, Buffer.buffer(bytes), contentType);
+                yield api.sendDocumentMultipart(token(), form).map(TelegramResponse::result);
+            }
+        };
+    }
+
+    // --- sendAudio ---
+
+    public Uni<Message> sendAudio(long chatId, InputFile audio) {
+        return sendAudio(chatId, audio, null, null);
+    }
+
+    public Uni<Message> sendAudio(long chatId, InputFile audio, String caption) {
+        return sendAudio(chatId, audio, caption, null);
+    }
+
+    public Uni<Message> sendAudio(long chatId, InputFile audio, String caption, ReplyMarkup markup) {
+        return switch (audio) {
+            case InputFile.FileId(var id) -> api.sendAudioJson(
+                    token(), new SendAudioJsonRequest(chatId, id, caption, markup)).map(TelegramResponse::result);
+
+            case InputFile.Url(var url) -> api.sendAudioJson(
+                    token(), new SendAudioJsonRequest(chatId, url, caption, markup)).map(TelegramResponse::result);
+
+            case InputFile.BinaryPath(var path, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("audio", fileName, path.toAbsolutePath().toString(), contentType);
+                yield api.sendAudioMultipart(token(), form).map(TelegramResponse::result);
+            }
+
+            case InputFile.BinaryBytes(var bytes, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("audio", fileName, Buffer.buffer(bytes), contentType);
+                yield api.sendAudioMultipart(token(), form).map(TelegramResponse::result);
+            }
+        };
+    }
+
+    // --- sendMediaGroup ---
+
+    public Uni<List<Message>> sendMediaGroup(long chatId, List<? extends InputMedia> media) {
+        return sendMediaGroup(chatId, media, null);
+    }
+
+    public Uni<List<Message>> sendMediaGroup(long chatId, List<? extends InputMedia> media,
+            Map<String, InputFile> attachments) {
+        if (attachments == null || attachments.isEmpty()) {
+            return api.sendMediaGroupJson(token(), new SendMediaGroupJsonRequest(chatId, media))
+                    .map(TelegramResponse::result);
+        }
+
+        try {
+            ClientMultipartForm form = ClientMultipartForm.create()
+                    .attribute("chat_id", String.valueOf(chatId), "text/plain")
+                    .attribute("media", objectMapper.writeValueAsString(media), "application/json");
+
+            for (Map.Entry<String, InputFile> entry : attachments.entrySet()) {
+                String fieldName = entry.getKey();
+                InputFile file = entry.getValue();
+                switch (file) {
+                    case InputFile.BinaryPath(var path, var fileName, var contentType) ->
+                        form.binaryFileUpload(fieldName, fileName, path.toAbsolutePath().toString(), contentType);
+                    case InputFile.BinaryBytes(var bytes, var fileName, var contentType) ->
+                        form.binaryFileUpload(fieldName, fileName, Buffer.buffer(bytes), contentType);
+                    case InputFile.FileId(var id) ->
+                        form.attribute(fieldName, id, "text/plain");
+                    case InputFile.Url(var url) ->
+                        form.attribute(fieldName, url, "text/plain");
+                }
+            }
+
+            return api.sendMediaGroupMultipart(token(), form).map(TelegramResponse::result);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Impossibile serializzare media group", e);
+        }
+    }
+
+    private ClientMultipartForm baseMultipart(long chatId, String caption, ReplyMarkup markup) {
+        ClientMultipartForm form = ClientMultipartForm.create()
+                .attribute("chat_id", String.valueOf(chatId), "text/plain");
+
+        if (caption != null) {
+            form.attribute("caption", caption, "text/plain");
+        }
+        if (markup != null) {
+            try {
+                form.attribute("reply_markup", objectMapper.writeValueAsString(markup), "application/json");
+            } catch (JsonProcessingException e) {
+                throw new IllegalArgumentException("Impossibile serializzare reply_markup", e);
+            }
+        }
+        return form;
     }
 
     public TelegramBotApi api() {

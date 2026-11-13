@@ -10,10 +10,15 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
+import org.jboss.resteasy.reactive.client.api.ClientMultipartForm;
 
 import io.quarkiverse.telegram.bot.runtime.model.GetUpdatesRequest;
 import io.quarkiverse.telegram.bot.runtime.model.Message;
+import io.quarkiverse.telegram.bot.runtime.model.SendAudioJsonRequest;
+import io.quarkiverse.telegram.bot.runtime.model.SendDocumentJsonRequest;
+import io.quarkiverse.telegram.bot.runtime.model.SendMediaGroupJsonRequest;
 import io.quarkiverse.telegram.bot.runtime.model.SendMessage;
+import io.quarkiverse.telegram.bot.runtime.model.SendPhotoJsonRequest;
 import io.quarkiverse.telegram.bot.runtime.model.SetMyCommandsRequest;
 import io.quarkiverse.telegram.bot.runtime.model.SetWebhookRequest;
 import io.quarkiverse.telegram.bot.runtime.model.TelegramResponse;
@@ -61,4 +66,72 @@ public interface TelegramBotApi {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     Uni<TelegramResponse<Boolean>> setMyCommands(@PathParam("token") String token, SetMyCommandsRequest req);
+
+    // sendPhoto: JSON vs Multipart
+    @POST
+    @Path("/sendPhoto")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<Message>> sendPhotoJson(
+            @PathParam("token") String token,
+            SendPhotoJsonRequest req);
+
+    @POST
+    @Path("/sendPhoto")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<Message>> sendPhotoMultipart(
+            @PathParam("token") String token,
+            ClientMultipartForm form);
+
+    // sendDocument: JSON vs Multipart
+    @POST
+    @Path("/sendDocument")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<Message>> sendDocumentJson(
+            @PathParam("token") String token,
+            SendDocumentJsonRequest req);
+
+    @POST
+    @Path("/sendDocument")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<Message>> sendDocumentMultipart(
+            @PathParam("token") String token,
+            ClientMultipartForm form);
+
+    // sendAudio: JSON vs Multipart
+    @POST
+    @Path("/sendAudio")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<Message>> sendAudioJson(
+            @PathParam("token") String token,
+            SendAudioJsonRequest req);
+
+    @POST
+    @Path("/sendAudio")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<Message>> sendAudioMultipart(
+            @PathParam("token") String token,
+            ClientMultipartForm form);
+
+    // sendMediaGroup: JSON vs Multipart
+    @POST
+    @Path("/sendMediaGroup")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<List<Message>>> sendMediaGroupJson(
+            @PathParam("token") String token,
+            SendMediaGroupJsonRequest req);
+
+    @POST
+    @Path("/sendMediaGroup")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<List<Message>>> sendMediaGroupMultipart(
+            @PathParam("token") String token,
+            ClientMultipartForm form);
 }
