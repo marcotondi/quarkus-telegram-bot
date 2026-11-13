@@ -21,6 +21,13 @@ public interface TelegramBotConfig {
     Optional<String> token();
 
     /**
+     * Optional bot username (without '@').
+     * If configured, commands with an explicit target in group chats (e.g. '/start@MyBot')
+     * will only match if the target matches this username.
+     */
+    Optional<String> botUsername();
+
+    /**
      * Transport mode: AUTO selects POLLING in dev/test, WEBHOOK in prod.
      */
     @WithDefault("AUTO")
@@ -93,15 +100,16 @@ public interface TelegramBotConfig {
         Optional<String> publicUrl();
 
         /**
-         * Path where the webhook endpoint is mounted.
-         */
-        @WithDefault("/telegram/webhook")
-        String path();
-
-        /**
          * Secret token to validate incoming webhook requests via X-Telegram-Bot-Api-Secret-Token.
          */
         Optional<String> secretToken();
+
+        /**
+         * Whether a secret token is strictly required. Defaults to true.
+         * If false, requests without token or with unconfigured secret token are permitted.
+         */
+        @WithDefault("true")
+        boolean requireSecretToken();
 
         /**
          * Automatically register webhook on Telegram startup when publicUrl is present.
@@ -111,12 +119,6 @@ public interface TelegramBotConfig {
     }
 
     interface SessionConfig {
-        /**
-         * State storage backend: memory or redis.
-         */
-        @WithDefault("memory")
-        String store();
-
         /**
          * Automatic expiration TTL for inactive conversation sessions.
          */

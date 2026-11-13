@@ -1,6 +1,7 @@
 package io.quarkiverse.telegram.bot.runtime.dispatcher;
 
 import java.lang.reflect.Method;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -66,7 +67,8 @@ public class UpdateDispatcher {
             Uni<Void> prev = (previous == null ? Uni.createFrom().voidItem() : previous);
             Uni<Void> next = prev
                     .onFailure().recoverWithNull()
-                    .chain(() -> doDispatch(update, sessionKey));
+                    .chain(() -> doDispatch(update, sessionKey))
+                    .memoize().indefinitely();
             ref.set(next);
             return next;
         });
@@ -80,17 +82,19 @@ public class UpdateDispatcher {
     }
 
     private Uni<Void> doDispatch(Update update, SessionKey sessionKey) {
-        return sessionStore.load(sessionKey)
-                .flatMap(snapshotOpt -> {
-                    ConversationContextImpl ctx = new ConversationContextImpl(
-                            sessionKey,
-                            snapshotOpt.orElse(null),
-                            sessionStore,
-                            client.objectMapper(),
-                            config.session().ttl());
-                    return processUpdate(update, sessionKey, ctx)
-                            .flatMap(v -> persistContext(ctx));
-                });
+        return sessionStore.acquireLock(sessionKey, Duration.ofSeconds(15))
+                .flatMap(locked -> sessionStore.load(sessionKey)
+                        .flatMap(snapshotOpt -> {
+                            ConversationContextImpl ctx = new ConversationContextImpl(
+                                    sessionKey,
+                                    snapshotOpt.orElse(null),
+                                    sessionStore,
+                                    client.objectMapper(),
+                                    config.session().ttl());
+                            return processUpdate(update, sessionKey, ctx)
+                                    .flatMap(v -> persistContext(ctx));
+                        }))
+                .eventually(() -> sessionStore.releaseLock(sessionKey));
     }
 
     private Uni<Void> persistContext(ConversationContextImpl ctx) {
@@ -181,12 +185,15 @@ public class UpdateDispatcher {
         // 3a. Commands without state condition
         if (message != null && message.text() != null && message.text().startsWith("/")) {
             String rawCommand = extractCommand(message.text());
-            for (HandlerDescriptor h : handlers) {
-                if (h.getType() == HandlerType.COMMAND && h.getStateCondition() == null
-                        && matchesCommand(h.getMatchValue(), rawCommand)) {
-                    return invokeHandler(h, update, ctx, null);
+            if (rawCommand != null) {
+                for (HandlerDescriptor h : handlers) {
+                    if (h.getType() == HandlerType.COMMAND && h.getStateCondition() == null
+                            && matchesCommand(h.getMatchValue(), rawCommand)) {
+                        return invokeHandler(h, update, ctx, null);
+                    }
                 }
             }
+            return Uni.createFrom().voidItem();
         }
 
         // 3b. Callback queries without state condition
@@ -261,11 +268,7 @@ public class UpdateDispatcher {
                 }
             }
             Uni<Void> editUni = client.editMessageText(editMsg).replaceWithVoid();
-            if (update != null && update.callbackQuery() != null) {
-                return editUni.onItemOrFailure().transformToUni((v, t) -> client
-                        .answerCallbackQuery(update.callbackQuery().id()).replaceWithVoid().onFailure().recoverWithNull());
-            }
-            return editUni;
+            return dismissCallbackQueryAndPropagate(editUni, update);
         }
         if (result instanceof AnswerCallbackQuery answerCb) {
             if ((answerCb.callbackQueryId() == null || answerCb.callbackQueryId().isBlank()) && update != null
@@ -273,28 +276,36 @@ public class UpdateDispatcher {
                 answerCb = new AnswerCallbackQuery(update.callbackQuery().id(), answerCb.text(), answerCb.showAlert(),
                         answerCb.url(), answerCb.cacheTime());
             }
-            return client.answerCallbackQuery(answerCb).replaceWithVoid().onFailure().recoverWithNull();
+            return client.answerCallbackQuery(answerCb).replaceWithVoid();
         }
         if (result instanceof SendMessage sendMessage) {
             Uni<Void> sendUni = client.sendMessage(sendMessage).replaceWithVoid();
-            if (update != null && update.callbackQuery() != null) {
-                return sendUni.onItemOrFailure().transformToUni((v, t) -> client
-                        .answerCallbackQuery(update.callbackQuery().id()).replaceWithVoid().onFailure().recoverWithNull());
-            }
-            return sendUni;
+            return dismissCallbackQueryAndPropagate(sendUni, update);
         }
         if (result instanceof String text && chatId != null) {
             Uni<Void> sendUni = client.sendMessage(chatId, text).replaceWithVoid();
-            if (update != null && update.callbackQuery() != null) {
-                return sendUni.onItemOrFailure().transformToUni((v, t) -> client
-                        .answerCallbackQuery(update.callbackQuery().id()).replaceWithVoid().onFailure().recoverWithNull());
-            }
-            return sendUni;
+            return dismissCallbackQueryAndPropagate(sendUni, update);
         }
         if (update != null && update.callbackQuery() != null) {
-            return client.answerCallbackQuery(update.callbackQuery().id()).replaceWithVoid().onFailure().recoverWithNull();
+            return client.answerCallbackQuery(update.callbackQuery().id()).replaceWithVoid();
         }
         return Uni.createFrom().voidItem();
+    }
+
+    private Uni<Void> dismissCallbackQueryAndPropagate(Uni<Void> actionUni, Update update) {
+        if (update == null || update.callbackQuery() == null) {
+            return actionUni;
+        }
+        String callbackQueryId = update.callbackQuery().id();
+        return actionUni.onItemOrFailure().transformToUni((item, failure) -> {
+            Uni<Void> answerUni = client.answerCallbackQuery(callbackQueryId)
+                    .replaceWithVoid()
+                    .onFailure().recoverWithNull();
+            if (failure != null) {
+                return answerUni.chain(() -> Uni.createFrom().failure(failure));
+            }
+            return answerUni;
+        });
     }
 
     private Method getMethod(HandlerDescriptor descriptor, Class<?> beanClass) throws NoSuchMethodException {
@@ -303,12 +314,31 @@ public class UpdateDispatcher {
             return cached;
         }
 
-        for (Method m : beanClass.getMethods()) {
-            if (m.getName().equals(descriptor.getMethodName())
-                    && m.getParameterCount() == descriptor.getParamTypes().size()) {
-                methodCache.put(descriptor, m);
-                return m;
+        List<String> targetTypes = descriptor.getParamTypes();
+        Class<?> current = beanClass;
+        while (current != null && current != Object.class) {
+            for (Method m : current.getDeclaredMethods()) {
+                if (m.getName().equals(descriptor.getMethodName())
+                        && m.getParameterCount() == targetTypes.size()) {
+                    boolean typesMatch = true;
+                    Class<?>[] pTypes = m.getParameterTypes();
+                    for (int i = 0; i < pTypes.length; i++) {
+                        if (!pTypes[i].getName().equals(targetTypes.get(i))) {
+                            typesMatch = false;
+                            break;
+                        }
+                    }
+                    if (typesMatch) {
+                        try {
+                            m.setAccessible(true);
+                        } catch (Exception ignored) {
+                        }
+                        methodCache.put(descriptor, m);
+                        return m;
+                    }
+                }
             }
+            current = current.getSuperclass();
         }
         throw new NoSuchMethodException(beanClass.getName() + "#" + descriptor.getMethodName());
     }
@@ -401,10 +431,25 @@ public class UpdateDispatcher {
     private String extractCommand(String text) {
         String firstWord = text.trim().split("\\s+")[0];
         int atIndex = firstWord.indexOf('@');
-        return atIndex > 0 ? firstWord.substring(0, atIndex) : firstWord;
+        if (atIndex > 0) {
+            String command = firstWord.substring(0, atIndex);
+            String targetBot = firstWord.substring(atIndex + 1);
+            if (config.botUsername().isPresent()) {
+                String myUsername = config.botUsername().get();
+                if (!targetBot.equalsIgnoreCase(myUsername)) {
+                    // Command is addressed to another bot, do not match
+                    return null;
+                }
+            }
+            return command;
+        }
+        return firstWord;
     }
 
     private boolean matchesCommand(String configCommand, String actualCommand) {
+        if (configCommand == null || actualCommand == null) {
+            return false;
+        }
         String c1 = configCommand.startsWith("/") ? configCommand : "/" + configCommand;
         String c2 = actualCommand.startsWith("/") ? actualCommand : "/" + actualCommand;
         return c1.equalsIgnoreCase(c2);
@@ -421,10 +466,17 @@ public class UpdateDispatcher {
             return true;
         }
 
+        if (message == null) {
+            return false;
+        }
+
         return switch (type) {
             case TEXT -> message.text() != null;
+            case PHOTO -> message.photo() != null && !message.photo().isEmpty();
+            case DOCUMENT -> message.document() != null;
+            case VOICE -> message.voice() != null;
+            case LOCATION -> message.location() != null;
             case ANY -> true;
-            default -> true;
         };
     }
 

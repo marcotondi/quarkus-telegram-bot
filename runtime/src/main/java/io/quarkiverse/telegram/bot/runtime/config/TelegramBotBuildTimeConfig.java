@@ -17,6 +17,11 @@ public interface TelegramBotBuildTimeConfig {
      */
     WebhookConfig webhook();
 
+    /**
+     * Session build-time configuration.
+     */
+    SessionConfig session();
+
     interface WebhookConfig {
         /**
          * Whether the webhook HTTP endpoint is enabled and mounted on Vert.x.
@@ -29,5 +34,13 @@ public interface TelegramBotBuildTimeConfig {
          */
         @WithDefault("/telegram/webhook")
         String path();
+    }
+
+    interface SessionConfig {
+        /**
+         * State storage backend: memory or redis.
+         */
+        @WithDefault("memory")
+        String store();
     }
 }

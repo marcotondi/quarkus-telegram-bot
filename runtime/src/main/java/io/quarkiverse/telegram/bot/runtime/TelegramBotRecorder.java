@@ -39,7 +39,8 @@ public class TelegramBotRecorder {
     public void initTransports(
             RuntimeValue<UpdateDispatcher> dispatcherVal,
             LaunchMode launchMode,
-            List<BotCommand> commands) {
+            List<BotCommand> commands,
+            String webhookPath) {
         TelegramBotClient client = Arc.container().instance(TelegramBotClient.class).get();
         TelegramBotConfig config = Arc.container().instance(TelegramBotConfig.class).get();
         PollingRunner pollingRunner = Arc.container().instance(PollingRunner.class).get();
@@ -64,9 +65,16 @@ public class TelegramBotRecorder {
                 || (mode == TelegramBotConfig.TransportMode.AUTO && !launchMode.isDevOrTest());
 
         if (isWebhook) {
+            // Check secret token requirement in production
+            if (config.webhook().requireSecretToken() && config.webhook().secretToken().isEmpty()
+                    && !launchMode.isDevOrTest()) {
+                throw new IllegalStateException(
+                        "Telegram webhook is enabled with requireSecretToken=true, but 'quarkus.telegram.webhook.secret-token' is not configured. "
+                                + "Please configure a secret token or set 'quarkus.telegram.webhook.require-secret-token=false' if requests are authenticated upstream.");
+            }
             // Auto register webhook if publicUrl is configured
             if (config.webhook().autoRegister() && config.webhook().publicUrl().isPresent()) {
-                String fullWebhookUrl = config.webhook().publicUrl().get() + config.webhook().path();
+                String fullWebhookUrl = config.webhook().publicUrl().get() + webhookPath;
                 SetWebhookRequest req = new SetWebhookRequest(
                         fullWebhookUrl,
                         config.webhook().secretToken().orElse(null));

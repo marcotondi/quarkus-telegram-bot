@@ -31,9 +31,11 @@ import io.quarkiverse.telegram.bot.runtime.session.InMemorySessionStore;
 import io.quarkiverse.telegram.bot.runtime.session.RedisSessionStore;
 import io.quarkiverse.telegram.bot.runtime.transport.PollingRunner;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.arc.deployment.SyntheticBeansRuntimeInitBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.annotations.Consume;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
@@ -127,6 +129,7 @@ class TelegramBotProcessor {
             botClasses.add(method.declaringClass().name().toString());
 
             String command = ann.value().asString();
+            String description = ann.value("description") != null ? ann.value("description").asString() : null;
             boolean interrupts = ann.value("interruptsState") != null && ann.value("interruptsState").asBoolean();
             String state = getStateCondition(method);
 
@@ -138,7 +141,8 @@ class TelegramBotProcessor {
                     extractParameterTypes(method),
                     interrupts,
                     state,
-                    null)));
+                    null,
+                    description)));
         }
 
         // Scan @OnCallbackQuery
@@ -228,6 +232,7 @@ class TelegramBotProcessor {
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
+    @Consume(SyntheticBeansRuntimeInitBuildItem.class)
     void setupTransports(
             TelegramBotRecorder recorder,
             TelegramBotBuildTimeConfig buildTimeConfig,
@@ -241,6 +246,15 @@ class TelegramBotProcessor {
 
         for (HandlerBuildItem item : handlerBuildItems) {
             descriptors.add(item.getDescriptor());
+            if (item.getDescriptor().getType() == HandlerType.COMMAND
+                    && item.getDescriptor().getDescription() != null
+                    && !item.getDescriptor().getDescription().isBlank()) {
+                String cmd = item.getDescriptor().getMatchValue();
+                if (cmd != null && cmd.startsWith("/")) {
+                    cmd = cmd.substring(1);
+                }
+                botCommands.add(new BotCommand(cmd, item.getDescriptor().getDescription()));
+            }
         }
 
         RuntimeValue<UpdateDispatcher> dispatcher = recorder.createDispatcher(descriptors);
@@ -259,6 +273,6 @@ class TelegramBotProcessor {
         }
 
         // Initialize transports (polling or webhook)
-        recorder.initTransports(dispatcher, launchMode.getLaunchMode(), botCommands);
+        recorder.initTransports(dispatcher, launchMode.getLaunchMode(), botCommands, buildTimeConfig.webhook().path());
     }
 }

@@ -55,9 +55,16 @@ public class TelegramMockServer implements QuarkusTestResourceLifecycleManager {
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"ok\":true,\"result\":true}")));
 
+        // Stub setMyCommands
+        wireMockServer.stubFor(WireMock.post(WireMock.urlMatching("/bot.*/setMyCommands"))
+                .willReturn(WireMock.aResponse()
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"ok\":true,\"result\":true}")));
+
         return Map.of(
                 "quarkus.telegram.client.base-url", wireMockServer.baseUrl(),
                 "quarkus.telegram.token", "123456:TEST_TOKEN",
+                "quarkus.telegram.bot-username", "test_bot",
                 "quarkus.telegram.mode", "WEBHOOK");
     }
 

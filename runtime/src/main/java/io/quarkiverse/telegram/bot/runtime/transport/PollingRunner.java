@@ -19,7 +19,6 @@ import io.quarkiverse.telegram.bot.runtime.model.Update;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.ShutdownEvent;
 import io.smallrye.mutiny.Uni;
-import io.smallrye.mutiny.subscription.Cancellable;
 
 @ApplicationScoped
 public class PollingRunner {
@@ -32,7 +31,6 @@ public class PollingRunner {
     private final AtomicLong lastUpdateId = new AtomicLong(0);
 
     private UpdateDispatcher dispatcher;
-    private Cancellable cancellable;
 
     @Inject
     public PollingRunner(TelegramBotClient client, TelegramBotConfig config) {
@@ -94,11 +92,14 @@ public class PollingRunner {
         GetUpdatesRequest req = new GetUpdatesRequest(offset, limit, timeoutSec);
         client.getUpdates(req)
                 .onFailure().retry().withBackOff(Duration.ofSeconds(2), Duration.ofSeconds(10)).atMost(10)
+                .flatMap(updates -> {
+                    if (updates == null || updates.isEmpty() || !running.get()) {
+                        return Uni.createFrom().voidItem();
+                    }
+                    return processUpdatesSequentially(updates);
+                })
                 .subscribe().with(
-                        updates -> {
-                            if (updates != null && !updates.isEmpty()) {
-                                processUpdates(updates);
-                            }
+                        v -> {
                             if (running.get()) {
                                 pollLoop();
                             }
@@ -114,27 +115,33 @@ public class PollingRunner {
                         });
     }
 
-    private void processUpdates(List<Update> updates) {
+    private Uni<Void> processUpdatesSequentially(List<Update> updates) {
+        Uni<Void> chain = Uni.createFrom().voidItem();
         for (Update update : updates) {
-            if (update.updateId() > lastUpdateId.get()) {
-                lastUpdateId.set(update.updateId());
-            }
-            if (dispatcher != null) {
-                dispatcher.dispatch(update)
-                        .subscribe().with(
-                                v -> {
-                                },
-                                err -> LOG.errorf(err, "Error dispatching update %d: %s", update.updateId(), err.getMessage()));
-            }
+            chain = chain.chain(() -> {
+                if (!running.get()) {
+                    return Uni.createFrom().voidItem();
+                }
+                if (dispatcher == null) {
+                    if (update.updateId() > lastUpdateId.get()) {
+                        lastUpdateId.set(update.updateId());
+                    }
+                    return Uni.createFrom().voidItem();
+                }
+                return dispatcher.dispatch(update)
+                        .onItem().invoke(() -> {
+                            if (update.updateId() > lastUpdateId.get()) {
+                                lastUpdateId.set(update.updateId());
+                            }
+                        });
+            });
         }
+        return chain;
     }
 
     public synchronized void stop() {
         if (running.compareAndSet(true, false)) {
             LOG.info("Stopping Telegram Long Polling engine...");
-            if (cancellable != null) {
-                cancellable.cancel();
-            }
         }
     }
 

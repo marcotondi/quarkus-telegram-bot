@@ -15,6 +15,7 @@ public class HandlerDescriptor implements Serializable {
     private boolean interruptsState;
     private String stateCondition;
     private String messageType;
+    private String description;
 
     public HandlerDescriptor() {
     }
@@ -27,7 +28,8 @@ public class HandlerDescriptor implements Serializable {
             List<String> paramTypes,
             boolean interruptsState,
             String stateCondition,
-            String messageType) {
+            String messageType,
+            String description) {
         this.type = type;
         this.matchValue = matchValue;
         this.className = className;
@@ -36,6 +38,19 @@ public class HandlerDescriptor implements Serializable {
         this.interruptsState = interruptsState;
         this.stateCondition = stateCondition;
         this.messageType = messageType;
+        this.description = description;
+    }
+
+    public HandlerDescriptor(
+            HandlerType type,
+            String matchValue,
+            String className,
+            String methodName,
+            List<String> paramTypes,
+            boolean interruptsState,
+            String stateCondition,
+            String messageType) {
+        this(type, matchValue, className, methodName, paramTypes, interruptsState, stateCondition, messageType, null);
     }
 
     public HandlerDescriptor(
@@ -109,6 +124,14 @@ public class HandlerDescriptor implements Serializable {
 
     public void setMessageType(String messageType) {
         this.messageType = messageType;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     @Override

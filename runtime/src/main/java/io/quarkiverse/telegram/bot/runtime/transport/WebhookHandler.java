@@ -27,7 +27,7 @@ public class WebhookHandler implements Handler<RoutingContext> {
 
     @Override
     public void handle(RoutingContext ctx) {
-        // Validate secret token if configured
+        // Validate secret token if configured or required
         if (config.webhook().secretToken().isPresent()) {
             String expected = config.webhook().secretToken().get();
             String actual = ctx.request().getHeader(SECRET_TOKEN_HEADER);
@@ -36,6 +36,10 @@ public class WebhookHandler implements Handler<RoutingContext> {
                 ctx.response().setStatusCode(403).end("Forbidden");
                 return;
             }
+        } else if (config.webhook().requireSecretToken()) {
+            LOG.warn("Rejected incoming Telegram webhook request: secret token required but not configured.");
+            ctx.response().setStatusCode(403).end("Forbidden");
+            return;
         }
 
         String body = ctx.body() != null ? ctx.body().asString() : null;
@@ -46,15 +50,23 @@ public class WebhookHandler implements Handler<RoutingContext> {
 
         try {
             Update update = objectMapper.readValue(body, Update.class);
-            ctx.response().setStatusCode(200).end();
-
             if (dispatcher != null) {
                 dispatcher.dispatch(update)
                         .subscribe().with(
                                 v -> {
+                                    if (!ctx.response().ended()) {
+                                        ctx.response().setStatusCode(200).end();
+                                    }
                                 },
-                                err -> LOG.errorf(err, "Error dispatching webhook update %d: %s", update.updateId(),
-                                        err.getMessage()));
+                                err -> {
+                                    LOG.errorf(err, "Error dispatching webhook update %d: %s", update.updateId(),
+                                            err.getMessage());
+                                    if (!ctx.response().ended()) {
+                                        ctx.response().setStatusCode(500).end("Internal Server Error");
+                                    }
+                                });
+            } else {
+                ctx.response().setStatusCode(200).end();
             }
         } catch (Exception e) {
             LOG.errorf(e, "Failed to parse incoming Telegram update JSON: %s", e.getMessage());

@@ -41,7 +41,7 @@ public class TelegramModelGenerator {
     private static final Set<String> SKIP_SCHEMAS = Set.of("InputFile");
 
     private static final Set<String> KEYBOARD_MARKUP_SCHEMAS = Set.of(
-            "InlineKeyboardMarkup", "ReplyKeyboardMarkup", "ReplyKeyboardRemove");
+            "InlineKeyboardMarkup", "ReplyKeyboardMarkup", "ReplyKeyboardRemove", "ForceReply");
 
     public static void main(String[] args) throws Exception {
         if (args.length < 3) {

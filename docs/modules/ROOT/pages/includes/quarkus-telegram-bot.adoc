@@ -28,7 +28,7 @@ endif::add-copy-button-to-env-var[]
 |boolean
 |`+++true+++`
 
-a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-telegram-webhook-path_bt]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-webhook-path_bt[`+++quarkus.telegram.webhook.path+++`]##
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-telegram-webhook-path]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-webhook-path[`+++quarkus.telegram.webhook.path+++`]##
 ifdef::add-copy-button-to-config-props[]
 config_property_copy_button:+++quarkus.telegram.webhook.path+++[]
 endif::add-copy-button-to-config-props[]
@@ -49,6 +49,27 @@ endif::add-copy-button-to-env-var[]
 |string
 |`+++/telegram/webhook+++`
 
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-telegram-session-store]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-session-store[`+++quarkus.telegram.session.store+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.telegram.session.store+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+State storage backend: memory or redis.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_TELEGRAM_SESSION_STORE+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_TELEGRAM_SESSION_STORE+++`
+endif::add-copy-button-to-env-var[]
+--
+|string
+|`+++memory+++`
+
 a| [[quarkus-telegram-bot_quarkus-telegram-token]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-token[`+++quarkus.telegram.token+++`]##
 ifdef::add-copy-button-to-config-props[]
 config_property_copy_button:+++quarkus.telegram.token+++[]
@@ -65,6 +86,27 @@ Environment variable: env_var_with_copy_button:+++QUARKUS_TELEGRAM_TOKEN+++[]
 endif::add-copy-button-to-env-var[]
 ifndef::add-copy-button-to-env-var[]
 Environment variable: `+++QUARKUS_TELEGRAM_TOKEN+++`
+endif::add-copy-button-to-env-var[]
+--
+|string
+|
+
+a| [[quarkus-telegram-bot_quarkus-telegram-bot-username]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-bot-username[`+++quarkus.telegram.bot-username+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.telegram.bot-username+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Optional bot username (without '@'). If configured, commands with an explicit target in group chats (e.g. '/start@MyBot') will only match if the target matches this username.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_TELEGRAM_BOT_USERNAME+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_TELEGRAM_BOT_USERNAME+++`
 endif::add-copy-button-to-env-var[]
 --
 |string
@@ -217,27 +259,6 @@ endif::add-copy-button-to-env-var[]
 |string
 |
 
-a| [[quarkus-telegram-bot_quarkus-telegram-webhook-path]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-webhook-path[`+++quarkus.telegram.webhook.path+++`]##
-ifdef::add-copy-button-to-config-props[]
-config_property_copy_button:+++quarkus.telegram.webhook.path+++[]
-endif::add-copy-button-to-config-props[]
-
-
-[.description]
---
-Path where the webhook endpoint is mounted.
-
-
-ifdef::add-copy-button-to-env-var[]
-Environment variable: env_var_with_copy_button:+++QUARKUS_TELEGRAM_WEBHOOK_PATH+++[]
-endif::add-copy-button-to-env-var[]
-ifndef::add-copy-button-to-env-var[]
-Environment variable: `+++QUARKUS_TELEGRAM_WEBHOOK_PATH+++`
-endif::add-copy-button-to-env-var[]
---
-|string
-|`+++/telegram/webhook+++`
-
 a| [[quarkus-telegram-bot_quarkus-telegram-webhook-secret-token]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-webhook-secret-token[`+++quarkus.telegram.webhook.secret-token+++`]##
 ifdef::add-copy-button-to-config-props[]
 config_property_copy_button:+++quarkus.telegram.webhook.secret-token+++[]
@@ -259,6 +280,27 @@ endif::add-copy-button-to-env-var[]
 |string
 |
 
+a| [[quarkus-telegram-bot_quarkus-telegram-webhook-require-secret-token]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-webhook-require-secret-token[`+++quarkus.telegram.webhook.require-secret-token+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.telegram.webhook.require-secret-token+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Whether a secret token is strictly required. Defaults to true. If false, requests without token or with unconfigured secret token are permitted.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_TELEGRAM_WEBHOOK_REQUIRE_SECRET_TOKEN+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_TELEGRAM_WEBHOOK_REQUIRE_SECRET_TOKEN+++`
+endif::add-copy-button-to-env-var[]
+--
+|boolean
+|`+++true+++`
+
 a| [[quarkus-telegram-bot_quarkus-telegram-webhook-auto-register]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-webhook-auto-register[`+++quarkus.telegram.webhook.auto-register+++`]##
 ifdef::add-copy-button-to-config-props[]
 config_property_copy_button:+++quarkus.telegram.webhook.auto-register+++[]
@@ -279,27 +321,6 @@ endif::add-copy-button-to-env-var[]
 --
 |boolean
 |`+++true+++`
-
-a| [[quarkus-telegram-bot_quarkus-telegram-session-store]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-session-store[`+++quarkus.telegram.session.store+++`]##
-ifdef::add-copy-button-to-config-props[]
-config_property_copy_button:+++quarkus.telegram.session.store+++[]
-endif::add-copy-button-to-config-props[]
-
-
-[.description]
---
-State storage backend: memory or redis.
-
-
-ifdef::add-copy-button-to-env-var[]
-Environment variable: env_var_with_copy_button:+++QUARKUS_TELEGRAM_SESSION_STORE+++[]
-endif::add-copy-button-to-env-var[]
-ifndef::add-copy-button-to-env-var[]
-Environment variable: `+++QUARKUS_TELEGRAM_SESSION_STORE+++`
-endif::add-copy-button-to-env-var[]
---
-|string
-|`+++memory+++`
 
 a| [[quarkus-telegram-bot_quarkus-telegram-session-ttl]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-session-ttl[`+++quarkus.telegram.session.ttl+++`]##
 ifdef::add-copy-button-to-config-props[]

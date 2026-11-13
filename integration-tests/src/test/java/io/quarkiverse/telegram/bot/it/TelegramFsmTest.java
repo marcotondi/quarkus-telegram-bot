@@ -166,6 +166,75 @@ public class TelegramFsmTest {
         verifyMessageSent("Nessuna operazione in corso da annullare.");
     }
 
+    @Test
+    public void testFsmRollbackOnDeliveryFailure() throws Exception {
+        // Step 1: Start booking
+        String startJson = """
+                {
+                    "update_id": 301,
+                    "message": {
+                        "message_id": 30,
+                        "date": 1700000000,
+                        "chat": { "id": 5003, "type": "private" },
+                        "from": { "id": 9003, "is_bot": false, "first_name": "RollbackUser" },
+                        "text": "/prenota"
+                    }
+                }
+                """;
+
+        given().contentType(ContentType.JSON).body(startJson)
+                .when().post("/telegram/webhook")
+                .then().statusCode(200);
+
+        verifyMessageSent("Per quale data vuoi prenotare?");
+
+        // Step 2: Stub WireMock to fail on "CRASH_DATE"
+        TelegramMockServer.getWireMockServer().stubFor(
+                WireMock.post(WireMock.urlMatching("/bot.*/sendMessage"))
+                        .withRequestBody(WireMock.containing("CRASH_DATE"))
+                        .willReturn(WireMock.aResponse()
+                                .withHeader("Content-Type", "application/json")
+                                .withBody("{\"ok\":false,\"error_code\":400,\"description\":\"Bad Request: network error\"}")));
+
+        String crashDateJson = """
+                {
+                    "update_id": 302,
+                    "message": {
+                        "message_id": 31,
+                        "date": 1700000001,
+                        "chat": { "id": 5003, "type": "private" },
+                        "from": { "id": 9003, "is_bot": false, "first_name": "RollbackUser" },
+                        "text": "CRASH_DATE"
+                    }
+                }
+                """;
+
+        // Webhook must fail with 500 and NOT save the transition to WAITING_GUESTS
+        given().contentType(ContentType.JSON).body(crashDateJson)
+                .when().post("/telegram/webhook")
+                .then().statusCode(500);
+
+        // Step 3: Send valid date now. Since state was rolled back / not saved, it is still WAITING_DATE!
+        String validDateJson = """
+                {
+                    "update_id": 303,
+                    "message": {
+                        "message_id": 32,
+                        "date": 1700000002,
+                        "chat": { "id": 5003, "type": "private" },
+                        "from": { "id": 9003, "is_bot": false, "first_name": "RollbackUser" },
+                        "text": "2026-12-31"
+                    }
+                }
+                """;
+
+        given().contentType(ContentType.JSON).body(validDateJson)
+                .when().post("/telegram/webhook")
+                .then().statusCode(200);
+
+        verifyMessageSent("Data registrata: 2026-12-31. Quanti ospiti sarete?");
+    }
+
     private void verifyMessageSent(String expectedSubtext) throws InterruptedException {
         long end = System.currentTimeMillis() + 3000;
         AssertionError lastErr = null;

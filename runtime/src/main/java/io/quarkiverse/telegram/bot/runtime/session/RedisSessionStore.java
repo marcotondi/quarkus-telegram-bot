@@ -2,6 +2,7 @@ package io.quarkiverse.telegram.bot.runtime.session;
 
 import java.time.Duration;
 import java.util.Optional;
+import java.util.UUID;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -49,6 +50,26 @@ public class RedisSessionStore implements SessionStore {
     @Override
     public Uni<Void> delete(SessionKey key) {
         return commands.getdel(key.toStorageKey()).replaceWithVoid();
+    }
+
+    @Override
+    public Uni<Boolean> acquireLock(SessionKey key, Duration timeout) {
+        String lockKey = key.toStorageKey() + ":lock";
+        String token = UUID.randomUUID().toString();
+        return commands.setnx(lockKey, token)
+                .flatMap(acquired -> {
+                    if (Boolean.TRUE.equals(acquired)) {
+                        return commands.psetex(lockKey, timeout.toMillis(), token)
+                                .map(v -> true);
+                    }
+                    return Uni.createFrom().item(false);
+                });
+    }
+
+    @Override
+    public Uni<Void> releaseLock(SessionKey key) {
+        String lockKey = key.toStorageKey() + ":lock";
+        return commands.getdel(lockKey).replaceWithVoid();
     }
 
     private String serialize(SessionSnapshot snapshot) {

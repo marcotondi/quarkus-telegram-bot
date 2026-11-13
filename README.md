@@ -1,27 +1,105 @@
 # Quarkus Telegram Bot
 
 [![Version](https://img.shields.io/maven-central/v/io.quarkiverse.telegram/quarkus-telegram-bot?logo=apache-maven&style=flat-square)](https://central.sonatype.com/artifact/io.quarkiverse.telegram/quarkus-telegram-bot-parent)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-## Welcome to Quarkiverse!
+A high-performance, developer-friendly Quarkus extension for building Telegram bots using declarative annotations, reactive Mutiny APIs, conversational finite state machines (FSM), and automated Webhook or Long Polling transports.
 
-Congratulations and thank you for creating a new Quarkus extension project in Quarkiverse!
+---
 
-Feel free to replace this content with the proper description of your new project and necessary instructions how to use and contribute to it.
+## Features
 
-You can find the basic info, Quarkiverse policies and conventions in [the Quarkiverse wiki](https://github.com/quarkiverse/quarkiverse/wiki).
+- **Declarative Bot Endpoints**: Route updates with `@TelegramCommand`, `@OnCallbackQuery`, `@OnMessage`, and `@OnStateMismatch`.
+- **Conversational Finite State Machine (FSM)**: Maintain persistent multi-step conversations (`ConversationContext`) backed by in-memory storage or Redis.
+- **Dual Transports**: Seamless automatic switching between **Long Polling** (dev/test) and **Webhook** (production).
+- **Strongly-typed 8.x Models**: Full Telegram Bot API 8.x specification coverage with immutable records and fluent builders.
+- **Inline Keyboards & In-Place Pagination**: Built-in support for `EditMessageText` and automated dismissal of callback query loading spinners.
+- **Multipart Uploads**: Send photos, documents, audio, and media groups with reactive backpressure and configurable upload timeouts.
 
-In case you are creating a Quarkus extension project for the first time, please follow [Building My First Extension](https://quarkus.io/guides/building-my-first-extension) guide.
+---
 
-Other useful articles related to Quarkus extension development can be found under the [Writing Extensions](https://quarkus.io/guides/#writing-extensions) guide category on the [Quarkus.io](https://quarkus.io) website.
+## Installation
 
-Thanks again, good luck and have fun!
+Add the extension dependency to your Quarkus project:
+
+```xml
+<dependency>
+    <groupId>io.quarkiverse.telegram</groupId>
+    <artifactId>quarkus-telegram-bot</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+</dependency>
+```
+
+---
+
+## Quick Start
+
+### 1. Configuration
+
+Add your bot credentials to `application.properties`:
+
+```properties
+# Bot token from @BotFather
+quarkus.telegram.token=123456789:ABCdefGHIjklMNOpqrSTUvwxYZ
+
+# Optional: Bot username for group chat command filtering
+quarkus.telegram.bot-username=MyAwesomeBot
+
+# Transport mode: AUTO (default: POLLING in dev/test, WEBHOOK in prod)
+quarkus.telegram.mode=AUTO
+```
+
+### 2. Create Your Bot
+
+```java
+package com.example;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
+import io.quarkiverse.telegram.bot.runtime.api.CallbackParam;
+import io.quarkiverse.telegram.bot.runtime.api.OnCallbackQuery;
+import io.quarkiverse.telegram.bot.runtime.api.TelegramCommand;
+import io.quarkiverse.telegram.bot.runtime.model.EditMessageText;
+import io.quarkiverse.telegram.bot.runtime.model.InlineKeyboard;
+import io.quarkiverse.telegram.bot.runtime.model.Message;
+import io.quarkiverse.telegram.bot.runtime.model.SendMessage;
+import io.quarkiverse.telegram.bot.runtime.model.User;
+
+@ApplicationScoped
+public class GreetingBot {
+
+    @TelegramCommand(value = "/start", description = "Avvia il bot")
+    public SendMessage start(User user) {
+        return SendMessage.builder()
+                .text("Benvenuto, " + user.firstName() + "! Vuoi vedere il catalogo?")
+                .replyMarkup(InlineKeyboard.of("Catalogo 📚", "catalog_page_1"))
+                .build();
+    }
+
+    @OnCallbackQuery("catalog_page_{page}")
+    public EditMessageText paginate(@CallbackParam String page) {
+        return EditMessageText.builder()
+                .text("Catalogo - Pagina " + page)
+                .replyMarkup(InlineKeyboard.of("Pagina successiva ➡️", "catalog_page_2"))
+                .build();
+    }
+}
+```
+
+---
+
+## Build & Test
+
+```bash
+# Compile and test locally
+mvn clean test
+
+# Fast compile skipping checks
+mvn compile -Dno-format
+```
+
+---
 
 ## Documentation
 
-The documentation for this extension should be maintained as part of this repository and it is stored in the `docs/` directory.
-
-The layout should follow the [Antora's Standard File and Directory Set](https://docs.antora.org/antora/2.3/standard-directories/).
-
-Once the docs are ready to be published, please open a PR including this repository in the [Quarkiverse Docs Antora playbook](https://github.com/quarkiverse/quarkiverse-docs/blob/main/antora-playbook.yml#L7). See an example [here](https://github.com/quarkiverse/quarkiverse-docs/pull/1)
-
-Your documentation will then be published to the <https://docs.quarkiverse.io/> website.
+Comprehensive guides, conversation FSM examples, Redis persistence configuration, and reference docs are available in [docs/modules/ROOT/pages/index.adoc](docs/modules/ROOT/pages/index.adoc).

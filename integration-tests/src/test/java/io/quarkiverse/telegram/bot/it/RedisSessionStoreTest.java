@@ -85,4 +85,21 @@ public class RedisSessionStoreTest {
 
         verify(commands).getdel(key.toStorageKey());
     }
+
+    @Test
+    public void testAcquireAndReleaseDistributedLock() {
+        SessionKey key = new SessionKey(1001, 2001);
+        String lockKey = key.toStorageKey() + ":lock";
+
+        when(commands.setnx(eq(lockKey), anyString())).thenReturn(Uni.createFrom().item(true));
+        when(commands.psetex(eq(lockKey), anyLong(), anyString())).thenReturn(Uni.createFrom().voidItem());
+
+        boolean locked = store.acquireLock(key, Duration.ofSeconds(10)).await().indefinitely();
+        assertTrue(locked);
+        verify(commands).setnx(eq(lockKey), anyString());
+
+        when(commands.getdel(lockKey)).thenReturn(Uni.createFrom().item("token"));
+        store.releaseLock(key).await().indefinitely();
+        verify(commands).getdel(lockKey);
+    }
 }

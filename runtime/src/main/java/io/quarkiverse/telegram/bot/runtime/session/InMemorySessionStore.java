@@ -5,10 +5,16 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
 
 import io.quarkus.arc.DefaultBean;
+import io.quarkus.runtime.ShutdownEvent;
+import io.quarkus.runtime.StartupEvent;
 import io.smallrye.mutiny.Uni;
+import io.vertx.core.Vertx;
 
 @ApplicationScoped
 @DefaultBean
@@ -18,6 +24,53 @@ public class InMemorySessionStore implements SessionStore {
     }
 
     private final ConcurrentHashMap<SessionKey, Entry> store = new ConcurrentHashMap<>();
+    private final Vertx vertx;
+    private Long timerId;
+
+    @Inject
+    public InMemorySessionStore(Vertx vertx) {
+        this.vertx = vertx;
+    }
+
+    void onStart(@Observes StartupEvent event) {
+        if (vertx != null) {
+            timerId = vertx.setPeriodic(60_000, id -> cleanExpired());
+        }
+    }
+
+    void onStop(@Observes ShutdownEvent event) {
+        stopTimer();
+    }
+
+    @PreDestroy
+    void destroy() {
+        stopTimer();
+    }
+
+    private void stopTimer() {
+        if (vertx != null && timerId != null) {
+            vertx.cancelTimer(timerId);
+            timerId = null;
+        }
+    }
+
+    public int cleanExpired() {
+        Instant now = Instant.now();
+        int evicted = 0;
+        var it = store.entrySet().iterator();
+        while (it.hasNext()) {
+            var entry = it.next();
+            if (now.isAfter(entry.getValue().expiresAt())) {
+                it.remove();
+                evicted++;
+            }
+        }
+        return evicted;
+    }
+
+    public int size() {
+        return store.size();
+    }
 
     @Override
     public Uni<Optional<SessionSnapshot>> load(SessionKey key) {

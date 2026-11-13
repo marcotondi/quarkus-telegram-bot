@@ -67,7 +67,8 @@ public interface TelegramBotApi {
     @Path("/editMessageText")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    Uni<TelegramResponse<Message>> editMessageText(@PathParam("token") String token, EditMessageText req);
+    Uni<TelegramResponse<io.quarkiverse.telegram.bot.runtime.model.EditMessageResult>> editMessageText(
+            @PathParam("token") String token, EditMessageText req);
 
     @POST
     @Path("/answerCallbackQuery")

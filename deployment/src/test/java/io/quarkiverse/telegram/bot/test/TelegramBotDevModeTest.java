@@ -1,8 +1,15 @@
 package io.quarkiverse.telegram.bot.test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
 import org.jboss.shrinkwrap.api.ShrinkWrap;
+import org.jboss.shrinkwrap.api.asset.StringAsset;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -10,14 +17,21 @@ import io.quarkus.test.QuarkusDevModeTest;
 
 public class TelegramBotDevModeTest {
 
-    // Start hot reload (DevMode) test with your extension loaded
     @RegisterExtension
     static final QuarkusDevModeTest devModeTest = new QuarkusDevModeTest()
-            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class));
+            .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
+                    .addAsResource(new StringAsset(
+                            "quarkus.telegram.token=123:dev\nquarkus.telegram.mode=WEBHOOK\nquarkus.telegram.webhook.require-secret-token=false\n"),
+                            "application.properties"));
 
     @Test
-    public void writeYourOwnDevModeTest() {
-        // Write your dev mode tests here - see the testing extension guide https://quarkus.io/guides/writing-extensions#testing-hot-reload for more information
-        Assertions.assertTrue(true, "Add dev mode assertions to " + getClass().getName());
+    public void testDevModeWebhookRouteActive() throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:8080/telegram/webhook"))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+        HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, resp.statusCode());
     }
 }

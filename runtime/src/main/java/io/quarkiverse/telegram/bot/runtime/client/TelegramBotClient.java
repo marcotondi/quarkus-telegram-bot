@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkiverse.telegram.bot.runtime.config.TelegramBotConfig;
 import io.quarkiverse.telegram.bot.runtime.model.AnswerCallbackQuery;
 import io.quarkiverse.telegram.bot.runtime.model.BotCommand;
+import io.quarkiverse.telegram.bot.runtime.model.EditMessageResult;
 import io.quarkiverse.telegram.bot.runtime.model.EditMessageText;
 import io.quarkiverse.telegram.bot.runtime.model.GetUpdatesRequest;
 import io.quarkiverse.telegram.bot.runtime.model.InputFile;
@@ -55,24 +56,40 @@ public class TelegramBotClient {
                 "Telegram bot token is not configured. Please set 'quarkus.telegram.token'."));
     }
 
+    private <T> Uni<T> extractResult(Uni<TelegramResponse<T>> uni) {
+        return uni.map(resp -> {
+            if (resp == null) {
+                throw new TelegramApiException(null, "Null response from Telegram API");
+            }
+            if (!resp.ok()) {
+                throw new TelegramApiException(resp.errorCode(), resp.description());
+            }
+            return resp.result();
+        });
+    }
+
+    private <T> Uni<T> extractMultipartResult(Uni<TelegramResponse<T>> uni) {
+        return extractResult(uni.ifNoItem().after(config.client().uploadTimeout()).fail());
+    }
+
     public Uni<User> getMe() {
-        return api.getMe(token()).map(TelegramResponse::result);
+        return extractResult(api.getMe(token()));
     }
 
     public Uni<List<Update>> getUpdates(GetUpdatesRequest request) {
-        return api.getUpdates(token(), request).map(TelegramResponse::result);
+        return extractResult(api.getUpdates(token(), request));
     }
 
     public Uni<Boolean> setWebhook(SetWebhookRequest request) {
-        return api.setWebhook(token(), request).map(TelegramResponse::result);
+        return extractResult(api.setWebhook(token(), request));
     }
 
     public Uni<Boolean> deleteWebhook() {
-        return api.deleteWebhook(token()).map(TelegramResponse::result);
+        return extractResult(api.deleteWebhook(token()));
     }
 
     public Uni<Message> sendMessage(SendMessage message) {
-        return api.sendMessage(token(), message).map(TelegramResponse::result);
+        return extractResult(api.sendMessage(token(), message));
     }
 
     public Uni<Message> sendMessage(long chatId, String text) {
@@ -85,22 +102,26 @@ public class TelegramBotClient {
 
     // --- editMessageText ---
 
-    public Uni<Message> editMessageText(EditMessageText request) {
-        return api.editMessageText(token(), request).map(TelegramResponse::result);
+    public Uni<EditMessageResult> editMessageText(EditMessageText request) {
+        return extractResult(api.editMessageText(token(), request));
+    }
+
+    public Uni<Message> editChatMessageText(EditMessageText request) {
+        return editMessageText(request).map(EditMessageResult::asMessage);
     }
 
     public Uni<Message> editMessageText(long chatId, long messageId, String text) {
-        return editMessageText(new EditMessageText(chatId, messageId, text, null));
+        return editChatMessageText(new EditMessageText(chatId, messageId, text, null));
     }
 
     public Uni<Message> editMessageText(long chatId, long messageId, String text, ReplyMarkup replyMarkup) {
-        return editMessageText(new EditMessageText(chatId, messageId, text, replyMarkup));
+        return editChatMessageText(new EditMessageText(chatId, messageId, text, replyMarkup));
     }
 
     // --- answerCallbackQuery ---
 
     public Uni<Boolean> answerCallbackQuery(AnswerCallbackQuery request) {
-        return api.answerCallbackQuery(token(), request).map(TelegramResponse::result);
+        return extractResult(api.answerCallbackQuery(token(), request));
     }
 
     public Uni<Boolean> answerCallbackQuery(String callbackQueryId) {
@@ -116,7 +137,7 @@ public class TelegramBotClient {
     }
 
     public Uni<Boolean> setMyCommands(List<BotCommand> commands) {
-        return api.setMyCommands(token(), new SetMyCommandsRequest(commands)).map(TelegramResponse::result);
+        return extractResult(api.setMyCommands(token(), new SetMyCommandsRequest(commands)));
     }
 
     // --- sendPhoto ---
@@ -131,22 +152,22 @@ public class TelegramBotClient {
 
     public Uni<Message> sendPhoto(long chatId, InputFile photo, String caption, ReplyMarkup markup) {
         return switch (photo) {
-            case InputFile.FileId(var id) -> api.sendPhotoJson(
-                    token(), new SendPhotoJsonRequest(chatId, id, caption, markup)).map(TelegramResponse::result);
+            case InputFile.FileId(var id) -> extractResult(api.sendPhotoJson(
+                    token(), new SendPhotoJsonRequest(chatId, id, caption, markup)));
 
-            case InputFile.Url(var url) -> api.sendPhotoJson(
-                    token(), new SendPhotoJsonRequest(chatId, url, caption, markup)).map(TelegramResponse::result);
+            case InputFile.Url(var url) -> extractResult(api.sendPhotoJson(
+                    token(), new SendPhotoJsonRequest(chatId, url, caption, markup)));
 
             case InputFile.BinaryPath(var path, var fileName, var contentType) -> {
                 ClientMultipartForm form = baseMultipart(chatId, caption, markup)
                         .binaryFileUpload("photo", fileName, path.toAbsolutePath().toString(), contentType);
-                yield api.sendPhotoMultipart(token(), form).map(TelegramResponse::result);
+                yield extractMultipartResult(api.sendPhotoMultipart(token(), form));
             }
 
             case InputFile.BinaryBytes(var bytes, var fileName, var contentType) -> {
                 ClientMultipartForm form = baseMultipart(chatId, caption, markup)
                         .binaryFileUpload("photo", fileName, Buffer.buffer(bytes), contentType);
-                yield api.sendPhotoMultipart(token(), form).map(TelegramResponse::result);
+                yield extractMultipartResult(api.sendPhotoMultipart(token(), form));
             }
         };
     }
@@ -163,22 +184,22 @@ public class TelegramBotClient {
 
     public Uni<Message> sendDocument(long chatId, InputFile document, String caption, ReplyMarkup markup) {
         return switch (document) {
-            case InputFile.FileId(var id) -> api.sendDocumentJson(
-                    token(), new SendDocumentJsonRequest(chatId, id, caption, markup)).map(TelegramResponse::result);
+            case InputFile.FileId(var id) -> extractResult(api.sendDocumentJson(
+                    token(), new SendDocumentJsonRequest(chatId, id, caption, markup)));
 
-            case InputFile.Url(var url) -> api.sendDocumentJson(
-                    token(), new SendDocumentJsonRequest(chatId, url, caption, markup)).map(TelegramResponse::result);
+            case InputFile.Url(var url) -> extractResult(api.sendDocumentJson(
+                    token(), new SendDocumentJsonRequest(chatId, url, caption, markup)));
 
             case InputFile.BinaryPath(var path, var fileName, var contentType) -> {
                 ClientMultipartForm form = baseMultipart(chatId, caption, markup)
                         .binaryFileUpload("document", fileName, path.toAbsolutePath().toString(), contentType);
-                yield api.sendDocumentMultipart(token(), form).map(TelegramResponse::result);
+                yield extractMultipartResult(api.sendDocumentMultipart(token(), form));
             }
 
             case InputFile.BinaryBytes(var bytes, var fileName, var contentType) -> {
                 ClientMultipartForm form = baseMultipart(chatId, caption, markup)
                         .binaryFileUpload("document", fileName, Buffer.buffer(bytes), contentType);
-                yield api.sendDocumentMultipart(token(), form).map(TelegramResponse::result);
+                yield extractMultipartResult(api.sendDocumentMultipart(token(), form));
             }
         };
     }
@@ -195,22 +216,22 @@ public class TelegramBotClient {
 
     public Uni<Message> sendAudio(long chatId, InputFile audio, String caption, ReplyMarkup markup) {
         return switch (audio) {
-            case InputFile.FileId(var id) -> api.sendAudioJson(
-                    token(), new SendAudioJsonRequest(chatId, id, caption, markup)).map(TelegramResponse::result);
+            case InputFile.FileId(var id) -> extractResult(api.sendAudioJson(
+                    token(), new SendAudioJsonRequest(chatId, id, caption, markup)));
 
-            case InputFile.Url(var url) -> api.sendAudioJson(
-                    token(), new SendAudioJsonRequest(chatId, url, caption, markup)).map(TelegramResponse::result);
+            case InputFile.Url(var url) -> extractResult(api.sendAudioJson(
+                    token(), new SendAudioJsonRequest(chatId, url, caption, markup)));
 
             case InputFile.BinaryPath(var path, var fileName, var contentType) -> {
                 ClientMultipartForm form = baseMultipart(chatId, caption, markup)
                         .binaryFileUpload("audio", fileName, path.toAbsolutePath().toString(), contentType);
-                yield api.sendAudioMultipart(token(), form).map(TelegramResponse::result);
+                yield extractMultipartResult(api.sendAudioMultipart(token(), form));
             }
 
             case InputFile.BinaryBytes(var bytes, var fileName, var contentType) -> {
                 ClientMultipartForm form = baseMultipart(chatId, caption, markup)
                         .binaryFileUpload("audio", fileName, Buffer.buffer(bytes), contentType);
-                yield api.sendAudioMultipart(token(), form).map(TelegramResponse::result);
+                yield extractMultipartResult(api.sendAudioMultipart(token(), form));
             }
         };
     }
@@ -224,8 +245,7 @@ public class TelegramBotClient {
     public Uni<List<Message>> sendMediaGroup(long chatId, List<? extends InputMedia> media,
             Map<String, InputFile> attachments) {
         if (attachments == null || attachments.isEmpty()) {
-            return api.sendMediaGroupJson(token(), new SendMediaGroupJsonRequest(chatId, media))
-                    .map(TelegramResponse::result);
+            return extractResult(api.sendMediaGroupJson(token(), new SendMediaGroupJsonRequest(chatId, media)));
         }
 
         try {
@@ -248,7 +268,7 @@ public class TelegramBotClient {
                 }
             }
 
-            return api.sendMediaGroupMultipart(token(), form).map(TelegramResponse::result);
+            return extractMultipartResult(api.sendMediaGroupMultipart(token(), form));
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("Impossibile serializzare media group", e);
         }
