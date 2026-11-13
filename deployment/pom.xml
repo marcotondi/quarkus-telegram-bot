@@ -16,6 +16,14 @@
             <artifactId>quarkus-arc-deployment</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-rest-client-jackson-deployment</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-vertx-http-deployment</artifactId>
+        </dependency>
+        <dependency>
             <groupId>io.quarkiverse.telegram</groupId>
             <artifactId>quarkus-telegram-bot</artifactId>
             <version>${project.version}</version>
