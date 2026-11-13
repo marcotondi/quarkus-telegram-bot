@@ -7,6 +7,27 @@ h|[.header-title]##Configuration property##
 h|Type
 h|Default
 
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-telegram-webhook-enabled]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-webhook-enabled[`+++quarkus.telegram.webhook.enabled+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.telegram.webhook.enabled+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Whether the webhook HTTP endpoint is enabled and mounted on Vert.x.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_TELEGRAM_WEBHOOK_ENABLED+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_TELEGRAM_WEBHOOK_ENABLED+++`
+endif::add-copy-button-to-env-var[]
+--
+|boolean
+|`+++true+++`
+
 a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-telegram-webhook-path_bt]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-webhook-path_bt[`+++quarkus.telegram.webhook.path+++`]##
 ifdef::add-copy-button-to-config-props[]
 config_property_copy_button:+++quarkus.telegram.webhook.path+++[]

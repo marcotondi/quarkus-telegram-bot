@@ -14,8 +14,9 @@
     <name>Quarkus Telegram Bot - Parent</name>
 
     <modules>
-        <module>deployment</module>
+        <module>codegen</module>
         <module>runtime</module>
+        <module>deployment</module>
     </modules>
 
     <scm>

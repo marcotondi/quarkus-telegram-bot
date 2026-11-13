@@ -7,7 +7,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 @JsonSubTypes({
         @JsonSubTypes.Type(InlineKeyboardMarkup.class),
         @JsonSubTypes.Type(ReplyKeyboardMarkup.class),
-        @JsonSubTypes.Type(ReplyKeyboardRemove.class)
+        @JsonSubTypes.Type(ReplyKeyboardRemove.class),
+        @JsonSubTypes.Type(ForceReply.class)
 })
 public interface ReplyMarkup {
 }

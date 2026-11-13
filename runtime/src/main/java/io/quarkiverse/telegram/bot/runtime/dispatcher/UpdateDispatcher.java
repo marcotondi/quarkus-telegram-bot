@@ -12,6 +12,8 @@ import io.quarkiverse.telegram.bot.runtime.client.TelegramBotClient;
 import io.quarkiverse.telegram.bot.runtime.config.TelegramBotConfig;
 import io.quarkiverse.telegram.bot.runtime.model.CallbackQuery;
 import io.quarkiverse.telegram.bot.runtime.model.Chat;
+import io.quarkiverse.telegram.bot.runtime.model.InaccessibleMessage;
+import io.quarkiverse.telegram.bot.runtime.model.MaybeInaccessibleMessage;
 import io.quarkiverse.telegram.bot.runtime.model.Message;
 import io.quarkiverse.telegram.bot.runtime.model.SendMessage;
 import io.quarkiverse.telegram.bot.runtime.model.Update;
@@ -225,6 +227,15 @@ public class UpdateDispatcher {
             if (Update.class.isAssignableFrom(pt)) {
                 args[i] = update;
             } else if (Message.class.isAssignableFrom(pt)) {
+                if (update.message() != null) {
+                    args[i] = update.message();
+                } else if (update.callbackQuery() != null
+                        && update.callbackQuery().message() instanceof Message msg) {
+                    args[i] = msg;
+                } else {
+                    args[i] = null;
+                }
+            } else if (MaybeInaccessibleMessage.class.isAssignableFrom(pt)) {
                 args[i] = update.message() != null ? update.message()
                         : (update.callbackQuery() != null ? update.callbackQuery().message() : null);
             } else if (CallbackQuery.class.isAssignableFrom(pt)) {
@@ -256,14 +267,8 @@ public class UpdateDispatcher {
     }
 
     private Long extractChatId(Update update) {
-        if (update.message() != null && update.message().chat() != null) {
-            return update.message().chat().id();
-        }
-        if (update.callbackQuery() != null && update.callbackQuery().message() != null
-                && update.callbackQuery().message().chat() != null) {
-            return update.callbackQuery().message().chat().id();
-        }
-        return null;
+        Chat chat = extractChat(update);
+        return chat != null ? chat.id() : null;
     }
 
     private User extractUser(Update update) {
@@ -281,7 +286,12 @@ public class UpdateDispatcher {
             return update.message().chat();
         }
         if (update.callbackQuery() != null && update.callbackQuery().message() != null) {
-            return update.callbackQuery().message().chat();
+            MaybeInaccessibleMessage mim = update.callbackQuery().message();
+            if (mim instanceof Message m) {
+                return m.chat();
+            } else if (mim instanceof InaccessibleMessage im) {
+                return im.chat();
+            }
         }
         return null;
     }
