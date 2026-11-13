@@ -12,6 +12,8 @@ import jakarta.ws.rs.core.MediaType;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 import org.jboss.resteasy.reactive.client.api.ClientMultipartForm;
 
+import io.quarkiverse.telegram.bot.runtime.model.AnswerCallbackQuery;
+import io.quarkiverse.telegram.bot.runtime.model.EditMessageText;
 import io.quarkiverse.telegram.bot.runtime.model.GetUpdatesRequest;
 import io.quarkiverse.telegram.bot.runtime.model.Message;
 import io.quarkiverse.telegram.bot.runtime.model.SendAudioJsonRequest;
@@ -60,6 +62,18 @@ public interface TelegramBotApi {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
     Uni<TelegramResponse<Message>> sendMessage(@PathParam("token") String token, SendMessage req);
+
+    @POST
+    @Path("/editMessageText")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<Message>> editMessageText(@PathParam("token") String token, EditMessageText req);
+
+    @POST
+    @Path("/answerCallbackQuery")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<Boolean>> answerCallbackQuery(@PathParam("token") String token, AnswerCallbackQuery req);
 
     @POST
     @Path("/setMyCommands")

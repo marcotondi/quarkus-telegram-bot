@@ -101,6 +101,44 @@ public class BookingBot {
 }
 ----
 
+== Inline Keyboard Pagination & Callbacks
+
+To paginate or update messages in-place without producing duplicate messages, return `EditMessageText` from `@OnCallbackQuery`.
+The extension automatically invokes `answerCallbackQuery` in the background to dismiss the Telegram client loading spinner:
+
+[source,java]
+----
+@ApplicationScoped
+public class CatalogBot {
+
+    @TelegramCommand("/catalogo")
+    public SendMessage showCatalog(Chat chat) {
+        return SendMessage.builder()
+                .chatId(chat.id())
+                .text("Catalogo - Pagina 1")
+                .replyMarkup(InlineKeyboard.of("Avanti ➡️", "page_2"))
+                .build();
+    }
+
+    @OnCallbackQuery("page_*")
+    public EditMessageText onPageChange(@CallbackParam String page) {
+        int nextPage = Integer.parseInt(page) + 1;
+        return EditMessageText.builder()
+                .text("Catalogo - Pagina " + page)
+                .replyMarkup(InlineKeyboard.of("Avanti ➡️", "page_" + nextPage))
+                .build();
+    }
+
+    @OnCallbackQuery("info_*")
+    public AnswerCallbackQuery onInfo(@CallbackParam String item) {
+        return AnswerCallbackQuery.builder()
+                .text("Dettagli su: " + item)
+                .showAlert(true)
+                .build();
+    }
+}
+----
+
 == Configuration Reference
 
 include::includes/quarkus-telegram-bot.adoc[leveloffset=+1,opts=optional]

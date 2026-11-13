@@ -11,8 +11,10 @@ import org.jboss.logging.Logger;
 import io.quarkiverse.telegram.bot.runtime.api.MessageType;
 import io.quarkiverse.telegram.bot.runtime.client.TelegramBotClient;
 import io.quarkiverse.telegram.bot.runtime.config.TelegramBotConfig;
+import io.quarkiverse.telegram.bot.runtime.model.AnswerCallbackQuery;
 import io.quarkiverse.telegram.bot.runtime.model.CallbackQuery;
 import io.quarkiverse.telegram.bot.runtime.model.Chat;
+import io.quarkiverse.telegram.bot.runtime.model.EditMessageText;
 import io.quarkiverse.telegram.bot.runtime.model.InaccessibleMessage;
 import io.quarkiverse.telegram.bot.runtime.model.MaybeInaccessibleMessage;
 import io.quarkiverse.telegram.bot.runtime.model.Message;
@@ -230,25 +232,67 @@ public class UpdateDispatcher {
             Object[] args = resolveArgs(method, descriptor, update, ctx, callbackParam);
 
             Object result = method.invoke(beanInstance, args);
-            return handleResult(result, extractChatId(update));
+            return handleResult(result, extractChatId(update), update);
         } catch (Exception e) {
             LOG.errorf(e, "Error executing handler %s#%s", descriptor.getClassName(), descriptor.getMethodName());
             return Uni.createFrom().failure(e);
         }
     }
 
-    private Uni<Void> handleResult(Object result, Long chatId) {
+    private Uni<Void> handleResult(Object result, Long chatId, Update update) {
         if (result == null) {
+            if (update != null && update.callbackQuery() != null) {
+                return client.answerCallbackQuery(update.callbackQuery().id()).replaceWithVoid().onFailure().recoverWithNull();
+            }
             return Uni.createFrom().voidItem();
         }
         if (result instanceof Uni<?> uni) {
-            return uni.flatMap(val -> handleResult(val, chatId));
+            return uni.flatMap(val -> handleResult(val, chatId, update));
+        }
+        if (result instanceof EditMessageText editMsg) {
+            if (editMsg.chatId() == null && editMsg.inlineMessageId() == null && update != null
+                    && update.callbackQuery() != null) {
+                if (update.callbackQuery().message() instanceof Message msg) {
+                    editMsg = new EditMessageText(msg.chat().id(), msg.messageId(), null, editMsg.text(), editMsg.parseMode(),
+                            editMsg.replyMarkup());
+                } else if (update.callbackQuery().inlineMessageId() != null) {
+                    editMsg = new EditMessageText(null, null, update.callbackQuery().inlineMessageId(), editMsg.text(),
+                            editMsg.parseMode(), editMsg.replyMarkup());
+                }
+            }
+            Uni<Void> editUni = client.editMessageText(editMsg).replaceWithVoid();
+            if (update != null && update.callbackQuery() != null) {
+                return editUni.onItemOrFailure().transformToUni((v, t) -> client
+                        .answerCallbackQuery(update.callbackQuery().id()).replaceWithVoid().onFailure().recoverWithNull());
+            }
+            return editUni;
+        }
+        if (result instanceof AnswerCallbackQuery answerCb) {
+            if ((answerCb.callbackQueryId() == null || answerCb.callbackQueryId().isBlank()) && update != null
+                    && update.callbackQuery() != null) {
+                answerCb = new AnswerCallbackQuery(update.callbackQuery().id(), answerCb.text(), answerCb.showAlert(),
+                        answerCb.url(), answerCb.cacheTime());
+            }
+            return client.answerCallbackQuery(answerCb).replaceWithVoid().onFailure().recoverWithNull();
         }
         if (result instanceof SendMessage sendMessage) {
-            return client.sendMessage(sendMessage).replaceWithVoid();
+            Uni<Void> sendUni = client.sendMessage(sendMessage).replaceWithVoid();
+            if (update != null && update.callbackQuery() != null) {
+                return sendUni.onItemOrFailure().transformToUni((v, t) -> client
+                        .answerCallbackQuery(update.callbackQuery().id()).replaceWithVoid().onFailure().recoverWithNull());
+            }
+            return sendUni;
         }
         if (result instanceof String text && chatId != null) {
-            return client.sendMessage(chatId, text).replaceWithVoid();
+            Uni<Void> sendUni = client.sendMessage(chatId, text).replaceWithVoid();
+            if (update != null && update.callbackQuery() != null) {
+                return sendUni.onItemOrFailure().transformToUni((v, t) -> client
+                        .answerCallbackQuery(update.callbackQuery().id()).replaceWithVoid().onFailure().recoverWithNull());
+            }
+            return sendUni;
+        }
+        if (update != null && update.callbackQuery() != null) {
+            return client.answerCallbackQuery(update.callbackQuery().id()).replaceWithVoid().onFailure().recoverWithNull();
         }
         return Uni.createFrom().voidItem();
     }

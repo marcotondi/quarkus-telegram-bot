@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import com.github.tomakehurst.wiremock.client.WireMock;
 
 import io.quarkiverse.telegram.bot.runtime.client.TelegramBotClient;
+import io.quarkiverse.telegram.bot.runtime.model.Message;
 import io.quarkiverse.telegram.bot.runtime.model.User;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
@@ -101,6 +102,94 @@ public class TelegramBotWebhookTest {
 
         verifyWithRetry(WireMock.postRequestedFor(WireMock.urlMatching("/bot.*/sendMessage"))
                 .withRequestBody(WireMock.containing("Selected: guitar")));
+
+        // Also verifies answerCallbackQuery was automatically dispatched to dismiss loading spinner
+        verifyWithRetry(WireMock.postRequestedFor(WireMock.urlMatching("/bot.*/answerCallbackQuery"))
+                .withRequestBody(WireMock.containing("\"callback_query_id\":\"cb123\"")));
+    }
+
+    @Test
+    public void testWebhookEditMessageTextPagination() throws Exception {
+        String updateJson = """
+                {
+                    "update_id": 50,
+                    "callback_query": {
+                        "id": "cb_page_2",
+                        "from": {
+                            "id": 2001,
+                            "is_bot": false,
+                            "first_name": "Mario"
+                        },
+                        "message": {
+                            "message_id": 42,
+                            "date": 1700000000,
+                            "chat": {
+                                "id": 1001,
+                                "type": "private"
+                            },
+                            "text": "Pagina 1"
+                        },
+                        "data": "page_2"
+                    }
+                }
+                """;
+
+        given()
+                .contentType(ContentType.JSON)
+                .body(updateJson)
+                .when()
+                .post("/telegram/webhook")
+                .then()
+                .statusCode(200);
+
+        // Verifies message was edited in-place with new text
+        verifyWithRetry(WireMock.postRequestedFor(WireMock.urlMatching("/bot.*/editMessageText"))
+                .withRequestBody(WireMock.containing("Contenuto pagina 2"))
+                .withRequestBody(WireMock.containing("\"message_id\":42")));
+
+        // Verifies answerCallbackQuery was dispatched to dismiss loading spinner
+        verifyWithRetry(WireMock.postRequestedFor(WireMock.urlMatching("/bot.*/answerCallbackQuery"))
+                .withRequestBody(WireMock.containing("\"callback_query_id\":\"cb_page_2\"")));
+    }
+
+    @Test
+    public void testWebhookAnswerCallbackQueryAlert() throws Exception {
+        String updateJson = """
+                {
+                    "update_id": 51,
+                    "callback_query": {
+                        "id": "cb_alert_1",
+                        "from": {
+                            "id": 2001,
+                            "is_bot": false,
+                            "first_name": "Mario"
+                        },
+                        "data": "alert_operazione_completata"
+                    }
+                }
+                """;
+
+        given()
+                .contentType(ContentType.JSON)
+                .body(updateJson)
+                .when()
+                .post("/telegram/webhook")
+                .then()
+                .statusCode(200);
+
+        // Verifies answerCallbackQuery was sent with alert popup
+        verifyWithRetry(WireMock.postRequestedFor(WireMock.urlMatching("/bot.*/answerCallbackQuery"))
+                .withRequestBody(WireMock.containing("Alert: operazione_completata"))
+                .withRequestBody(WireMock.containing("\"show_alert\":true")));
+    }
+
+    @Test
+    public void testClientDirectEditMessageAndAnswerCallback() {
+        Message edited = client.editMessageText(1001, 42, "Nuovo testo").await().indefinitely();
+        assertNotNull(edited);
+
+        Boolean answered = client.answerCallbackQuery("cb_direct", "Notifica toast", false).await().indefinitely();
+        assertNotNull(answered);
     }
 
     private void verifyWithRetry(com.github.tomakehurst.wiremock.matching.RequestPatternBuilder pattern)

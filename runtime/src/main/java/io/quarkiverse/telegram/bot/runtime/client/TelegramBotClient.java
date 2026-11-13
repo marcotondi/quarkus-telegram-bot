@@ -13,7 +13,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.quarkiverse.telegram.bot.runtime.config.TelegramBotConfig;
+import io.quarkiverse.telegram.bot.runtime.model.AnswerCallbackQuery;
 import io.quarkiverse.telegram.bot.runtime.model.BotCommand;
+import io.quarkiverse.telegram.bot.runtime.model.EditMessageText;
 import io.quarkiverse.telegram.bot.runtime.model.GetUpdatesRequest;
 import io.quarkiverse.telegram.bot.runtime.model.InputFile;
 import io.quarkiverse.telegram.bot.runtime.model.InputMedia;
@@ -79,6 +81,38 @@ public class TelegramBotClient {
 
     public Uni<Message> sendMessage(String chatId, String text) {
         return sendMessage(new SendMessage(chatId, text));
+    }
+
+    // --- editMessageText ---
+
+    public Uni<Message> editMessageText(EditMessageText request) {
+        return api.editMessageText(token(), request).map(TelegramResponse::result);
+    }
+
+    public Uni<Message> editMessageText(long chatId, long messageId, String text) {
+        return editMessageText(new EditMessageText(chatId, messageId, text, null));
+    }
+
+    public Uni<Message> editMessageText(long chatId, long messageId, String text, ReplyMarkup replyMarkup) {
+        return editMessageText(new EditMessageText(chatId, messageId, text, replyMarkup));
+    }
+
+    // --- answerCallbackQuery ---
+
+    public Uni<Boolean> answerCallbackQuery(AnswerCallbackQuery request) {
+        return api.answerCallbackQuery(token(), request).map(TelegramResponse::result);
+    }
+
+    public Uni<Boolean> answerCallbackQuery(String callbackQueryId) {
+        return answerCallbackQuery(new AnswerCallbackQuery(callbackQueryId));
+    }
+
+    public Uni<Boolean> answerCallbackQuery(String callbackQueryId, String text) {
+        return answerCallbackQuery(new AnswerCallbackQuery(callbackQueryId, text));
+    }
+
+    public Uni<Boolean> answerCallbackQuery(String callbackQueryId, String text, boolean showAlert) {
+        return answerCallbackQuery(new AnswerCallbackQuery(callbackQueryId, text, showAlert));
     }
 
     public Uni<Boolean> setMyCommands(List<BotCommand> commands) {

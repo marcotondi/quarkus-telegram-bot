@@ -42,6 +42,19 @@ public class TelegramMockServer implements QuarkusTestResourceLifecycleManager {
                         .withBody(
                                 "{\"ok\":true,\"result\":{\"message_id\":999,\"date\":1700000000,\"chat\":{\"id\":1001,\"type\":\"private\"},\"text\":\"Echo\"}}")));
 
+        // Stub editMessageText
+        wireMockServer.stubFor(WireMock.post(WireMock.urlMatching("/bot.*/editMessageText"))
+                .willReturn(WireMock.aResponse()
+                        .withHeader("Content-Type", "application/json")
+                        .withBody(
+                                "{\"ok\":true,\"result\":{\"message_id\":999,\"date\":1700000000,\"chat\":{\"id\":1001,\"type\":\"private\"},\"text\":\"Edited text\"}}")));
+
+        // Stub answerCallbackQuery
+        wireMockServer.stubFor(WireMock.post(WireMock.urlMatching("/bot.*/answerCallbackQuery"))
+                .willReturn(WireMock.aResponse()
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"ok\":true,\"result\":true}")));
+
         return Map.of(
                 "quarkus.telegram.client.base-url", wireMockServer.baseUrl(),
                 "quarkus.telegram.token", "123456:TEST_TOKEN",
