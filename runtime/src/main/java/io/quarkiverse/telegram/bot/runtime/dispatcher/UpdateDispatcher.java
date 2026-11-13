@@ -4,6 +4,7 @@ import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.jboss.logging.Logger;
 
@@ -35,6 +36,7 @@ public class UpdateDispatcher {
     private final TelegramBotConfig config;
     private final SessionStore sessionStore;
     private final Map<HandlerDescriptor, Method> methodCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<SessionKey, Uni<Void>> sessionLocks = new ConcurrentHashMap<>();
 
     public UpdateDispatcher(
             List<HandlerDescriptor> handlers,
@@ -57,6 +59,25 @@ public class UpdateDispatcher {
             return processUpdate(update, null, null);
         }
 
+        AtomicReference<Uni<Void>> ref = new AtomicReference<>();
+        Uni<Void> chained = sessionLocks.compute(sessionKey, (k, previous) -> {
+            Uni<Void> prev = (previous == null ? Uni.createFrom().voidItem() : previous);
+            Uni<Void> next = prev
+                    .onFailure().recoverWithNull()
+                    .chain(() -> doDispatch(update, sessionKey));
+            ref.set(next);
+            return next;
+        });
+
+        return chained.eventually(() -> {
+            Uni<Void> target = ref.get();
+            if (target != null) {
+                sessionLocks.computeIfPresent(sessionKey, (k, v) -> v == target ? null : v);
+            }
+        });
+    }
+
+    private Uni<Void> doDispatch(Update update, SessionKey sessionKey) {
         return sessionStore.load(sessionKey)
                 .flatMap(snapshotOpt -> {
                     ConversationContextImpl ctx = new ConversationContextImpl(
@@ -97,24 +118,30 @@ public class UpdateDispatcher {
         CallbackQuery callbackQuery = update.callbackQuery();
         String currentState = ctx != null ? ctx.currentState().orElse(null) : null;
 
-        // 1. Check commands
+        // 1. Commands with interruptsState = true have absolute precedence
         if (message != null && message.text() != null && message.text().startsWith("/")) {
             String rawCommand = extractCommand(message.text());
             for (HandlerDescriptor h : handlers) {
-                if (h.getType() == HandlerType.COMMAND && matchesCommand(h.getMatchValue(), rawCommand)) {
-                    if (h.getStateCondition() != null && !h.getStateCondition().equals(currentState)) {
-                        continue;
-                    }
-                    if (h.isInterruptsState() && ctx != null) {
-                        ctx.complete();
-                    }
+                if (h.getType() == HandlerType.COMMAND && h.isInterruptsState()
+                        && matchesCommand(h.getMatchValue(), rawCommand)) {
                     return invokeHandler(h, update, ctx, null);
                 }
             }
         }
 
-        // 2. Check active state handlers first (if in an active state)
+        // 2. Active state handlers (if in an active state)
         if (currentState != null) {
+            // Check commands bound to this specific state
+            if (message != null && message.text() != null && message.text().startsWith("/")) {
+                String rawCommand = extractCommand(message.text());
+                for (HandlerDescriptor h : handlers) {
+                    if (h.getType() == HandlerType.COMMAND && matchesCommand(h.getMatchValue(), rawCommand)
+                            && currentState.equals(h.getStateCondition())) {
+                        return invokeHandler(h, update, ctx, null);
+                    }
+                }
+            }
+
             for (HandlerDescriptor h : handlers) {
                 if (currentState.equals(h.getStateCondition())) {
                     if (callbackQuery != null && h.getType() == HandlerType.CALLBACK_QUERY) {
@@ -129,9 +156,38 @@ public class UpdateDispatcher {
                     }
                 }
             }
+
+            // Input did not match the active state handlers: check for @OnStateMismatch handler!
+            // First look for state-specific mismatch handler, then fallback/global mismatch handler
+            for (HandlerDescriptor h : handlers) {
+                if (h.getType() == HandlerType.STATE_MISMATCH && currentState.equals(h.getStateCondition())) {
+                    return invokeHandler(h, update, ctx, null);
+                }
+            }
+            for (HandlerDescriptor h : handlers) {
+                if (h.getType() == HandlerType.STATE_MISMATCH && h.getStateCondition() == null) {
+                    return invokeHandler(h, update, ctx, null);
+                }
+            }
+
+            // If no state mismatch handler, per architecture doc, don't fall through to stateless standard handlers
+            LOG.debugf("Ignored update for state %s because no matching state handler or mismatch handler found", currentState);
+            return Uni.createFrom().voidItem();
         }
 
-        // 3. Callback queries without state condition
+        // 3. Stateless handlers (currentState == null)
+        // 3a. Commands without state condition
+        if (message != null && message.text() != null && message.text().startsWith("/")) {
+            String rawCommand = extractCommand(message.text());
+            for (HandlerDescriptor h : handlers) {
+                if (h.getType() == HandlerType.COMMAND && h.getStateCondition() == null
+                        && matchesCommand(h.getMatchValue(), rawCommand)) {
+                    return invokeHandler(h, update, ctx, null);
+                }
+            }
+        }
+
+        // 3b. Callback queries without state condition
         if (callbackQuery != null) {
             for (HandlerDescriptor h : handlers) {
                 if (h.getType() == HandlerType.CALLBACK_QUERY && h.getStateCondition() == null) {
@@ -143,7 +199,7 @@ public class UpdateDispatcher {
             }
         }
 
-        // 4. Standard message handlers without state condition
+        // 3c. Standard message handlers without state condition
         if (message != null) {
             for (HandlerDescriptor h : handlers) {
                 if (h.getType() == HandlerType.MESSAGE && h.getStateCondition() == null) {
@@ -250,6 +306,8 @@ public class UpdateDispatcher {
                 args[i] = ctx;
             } else if (String.class.isAssignableFrom(pt)) {
                 args[i] = callbackParam;
+            } else if (ctx != null && ctx.data(pt).isPresent()) {
+                args[i] = ctx.data(pt).get();
             } else {
                 args[i] = null;
             }

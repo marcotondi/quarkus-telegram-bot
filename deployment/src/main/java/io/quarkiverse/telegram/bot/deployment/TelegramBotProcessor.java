@@ -1,7 +1,9 @@
 package io.quarkiverse.telegram.bot.deployment;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationValue;
@@ -16,6 +18,7 @@ import io.quarkiverse.telegram.bot.runtime.api.MessageType;
 import io.quarkiverse.telegram.bot.runtime.api.OnCallbackQuery;
 import io.quarkiverse.telegram.bot.runtime.api.OnMessage;
 import io.quarkiverse.telegram.bot.runtime.api.OnState;
+import io.quarkiverse.telegram.bot.runtime.api.OnStateMismatch;
 import io.quarkiverse.telegram.bot.runtime.api.SessionPayload;
 import io.quarkiverse.telegram.bot.runtime.api.TelegramCommand;
 import io.quarkiverse.telegram.bot.runtime.client.TelegramBotClient;
@@ -25,6 +28,7 @@ import io.quarkiverse.telegram.bot.runtime.dispatcher.HandlerType;
 import io.quarkiverse.telegram.bot.runtime.dispatcher.UpdateDispatcher;
 import io.quarkiverse.telegram.bot.runtime.model.BotCommand;
 import io.quarkiverse.telegram.bot.runtime.session.InMemorySessionStore;
+import io.quarkiverse.telegram.bot.runtime.session.RedisSessionStore;
 import io.quarkiverse.telegram.bot.runtime.transport.PollingRunner;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
@@ -53,6 +57,7 @@ class TelegramBotProcessor {
     private static final DotName ON_CALLBACK_QUERY = DotName.createSimple(OnCallbackQuery.class.getName());
     private static final DotName ON_MESSAGE = DotName.createSimple(OnMessage.class.getName());
     private static final DotName ON_STATE = DotName.createSimple(OnState.class.getName());
+    private static final DotName ON_STATE_MISMATCH = DotName.createSimple(OnStateMismatch.class.getName());
     private static final DotName SESSION_PAYLOAD = DotName.createSimple(SessionPayload.class.getName());
 
     @BuildStep
@@ -81,6 +86,7 @@ class TelegramBotProcessor {
     void additionalBeans(BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
         additionalBeans.produce(AdditionalBeanBuildItem.unremovableOf(TelegramBotClient.class));
         additionalBeans.produce(AdditionalBeanBuildItem.unremovableOf(InMemorySessionStore.class));
+        additionalBeans.produce(AdditionalBeanBuildItem.unremovableOf(RedisSessionStore.class));
         additionalBeans.produce(AdditionalBeanBuildItem.unremovableOf(PollingRunner.class));
     }
 
@@ -112,10 +118,13 @@ class TelegramBotProcessor {
             BuildProducer<ReflectiveClassBuildItem> reflectiveClasses,
             BuildProducer<UnremovableBeanBuildItem> unremovableBeans) {
 
+        Set<String> botClasses = new HashSet<>();
+
         // Scan @TelegramCommand
         for (AnnotationInstance ann : index.getIndex().getAnnotations(TELEGRAM_COMMAND)) {
             MethodInfo method = ann.target().asMethod();
-            registerMethodAndClass(method, reflectiveMethods, reflectiveClasses, unremovableBeans);
+            registerMethodAndClass(method, reflectiveMethods, reflectiveClasses);
+            botClasses.add(method.declaringClass().name().toString());
 
             String command = ann.value().asString();
             boolean interrupts = ann.value("interruptsState") != null && ann.value("interruptsState").asBoolean();
@@ -135,7 +144,8 @@ class TelegramBotProcessor {
         // Scan @OnCallbackQuery
         for (AnnotationInstance ann : index.getIndex().getAnnotations(ON_CALLBACK_QUERY)) {
             MethodInfo method = ann.target().asMethod();
-            registerMethodAndClass(method, reflectiveMethods, reflectiveClasses, unremovableBeans);
+            registerMethodAndClass(method, reflectiveMethods, reflectiveClasses);
+            botClasses.add(method.declaringClass().name().toString());
 
             String pattern = ann.value() != null ? ann.value().asString() : "*";
             String state = getStateCondition(method);
@@ -154,7 +164,8 @@ class TelegramBotProcessor {
         // Scan @OnMessage
         for (AnnotationInstance ann : index.getIndex().getAnnotations(ON_MESSAGE)) {
             MethodInfo method = ann.target().asMethod();
-            registerMethodAndClass(method, reflectiveMethods, reflectiveClasses, unremovableBeans);
+            registerMethodAndClass(method, reflectiveMethods, reflectiveClasses);
+            botClasses.add(method.declaringClass().name().toString());
 
             AnnotationValue typeVal = ann.value("type");
             String messageType = typeVal != null ? typeVal.asEnum() : MessageType.ANY.name();
@@ -170,17 +181,36 @@ class TelegramBotProcessor {
                     state,
                     messageType)));
         }
+
+        // Scan @OnStateMismatch
+        for (AnnotationInstance ann : index.getIndex().getAnnotations(ON_STATE_MISMATCH)) {
+            MethodInfo method = ann.target().asMethod();
+            registerMethodAndClass(method, reflectiveMethods, reflectiveClasses);
+            botClasses.add(method.declaringClass().name().toString());
+
+            String state = ann.value() != null ? ann.value().asString() : "";
+            handlers.produce(new HandlerBuildItem(new HandlerDescriptor(
+                    HandlerType.STATE_MISMATCH,
+                    null,
+                    method.declaringClass().name().toString(),
+                    method.name(),
+                    extractParameterTypes(method),
+                    false,
+                    state.isEmpty() ? null : state,
+                    null)));
+        }
+
+        unremovableBeans
+                .produce(new UnremovableBeanBuildItem(beanInfo -> botClasses.contains(beanInfo.getBeanClass().toString())));
     }
 
     private void registerMethodAndClass(
             MethodInfo method,
             BuildProducer<ReflectiveMethodBuildItem> reflectiveMethods,
-            BuildProducer<ReflectiveClassBuildItem> reflectiveClasses,
-            BuildProducer<UnremovableBeanBuildItem> unremovableBeans) {
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) {
         reflectiveMethods.produce(new ReflectiveMethodBuildItem(method));
         reflectiveClasses.produce(ReflectiveClassBuildItem.builder(method.declaringClass().name().toString())
                 .constructors().methods().fields().build());
-        unremovableBeans.produce(UnremovableBeanBuildItem.beanClassNames(method.declaringClass().name().toString()));
     }
 
     private String getStateCondition(MethodInfo method) {

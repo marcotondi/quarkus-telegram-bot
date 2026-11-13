@@ -36,7 +36,9 @@ public class ConversationContextImpl implements ConversationContext {
             this.currentState = snapshot.state();
             if (snapshot.payloadJson() != null && snapshot.payloadType() != null) {
                 try {
-                    Class<?> clazz = Class.forName(snapshot.payloadType());
+                    ClassLoader cl = Thread.currentThread().getContextClassLoader();
+                    Class<?> clazz = (cl != null) ? cl.loadClass(snapshot.payloadType())
+                            : Class.forName(snapshot.payloadType());
                     this.currentPayload = objectMapper.readValue(snapshot.payloadJson(), clazz);
                 } catch (Exception e) {
                     LOG.warnf("Failed to deserialize session payload for %s: %s", sessionKey, e.getMessage());
@@ -58,7 +60,11 @@ public class ConversationContextImpl implements ConversationContext {
         if (type.isInstance(currentPayload)) {
             return Optional.of(type.cast(currentPayload));
         }
-        return Optional.empty();
+        try {
+            return Optional.ofNullable(objectMapper.convertValue(currentPayload, type));
+        } catch (Exception e) {
+            return Optional.empty();
+        }
     }
 
     @Override

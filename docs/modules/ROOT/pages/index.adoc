@@ -2,13 +2,20 @@
 
 include::./includes/attributes.adoc[]
 
-TIP: Describe what the extension does here.
+Quarkus Telegram Bot is a native, reactive, high-performance extension for building Telegram Bots on top of Quarkus, Vert.x, Mutiny, and Jackson.
+
+== Features
+
+* **Complete Telegram Bot API 8.x Model**: Over 230 Java 21 records and sealed interfaces generated from OpenAPI schemas.
+* **Declarative CDI Routing**: Handle incoming updates with `@TelegramCommand`, `@OnCallbackQuery`, `@OnMessage`, and `@OnState`.
+* **Zero-Reflection Multipart Streaming**: Upload files (`sendPhoto`, `sendDocument`, `sendAudio`, etc.) seamlessly with `BinaryBytes` and `BinaryPath` via Vert.x streaming.
+* **Conversational FSM**: Stateful conversation flows (`transitionTo`, `complete`, `@OnStateMismatch`, `interruptsState = true`).
+* **Pluggable Session Storage**: Built-in support for `InMemorySessionStore` (default) and `RedisSessionStore` (reactive via `quarkus-redis-client`).
+* **Flexible Transport Modes**: Automatic switching between Polling (ideal for local dev) and Webhook (high concurrency on Vert.x HTTP server).
 
 == Installation
 
-To use this extension, add the `io.quarkiverse.telegram:quarkus-telegram-bot` dependency to your build file.
-
-With Maven, add the following to your `pom.xml`:
+To use this extension, add the `io.quarkiverse.telegram:quarkus-telegram-bot` dependency to your build file:
 
 [source,xml,subs=attributes+]
 ----
@@ -19,13 +26,81 @@ With Maven, add the following to your `pom.xml`:
 </dependency>
 ----
 
-With Gradle, add the following to your `build.gradle`:
+== Configuration
 
-[source,gradle,subs=attributes+]
+Configure your bot token and transport mode in `application.properties`:
+
+[source,properties]
 ----
-implementation("io.quarkiverse.telegram:quarkus-telegram-bot:{project-version}")
+quarkus.telegram.token=123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ
+quarkus.telegram.mode=auto
+quarkus.telegram.session.store=in-memory
+quarkus.telegram.session.ttl=15m
 ----
 
-== Usage
+=== Using Redis for Session Storage
 
-TIP: Add a minimal usage example here.
+To use Redis for distributed, shared session state:
+
+[source,properties]
+----
+quarkus.telegram.session.store=redis
+quarkus.redis.hosts=redis://localhost:6379
+----
+
+== Conversational Flow Example
+
+[source,java]
+----
+@ApplicationScoped
+public class BookingBot {
+
+    @SessionPayload
+    public record BookingData(String date, Integer guests) {}
+
+    @TelegramCommand(value = "/prenota", description = "Avvia prenotazione")
+    public String startBooking(ConversationContext ctx) {
+        ctx.transitionTo("WAITING_DATE", new BookingData(null, null));
+        return "Per quale data vuoi prenotare? (es. 2026-12-25)";
+    }
+
+    @OnState("WAITING_DATE")
+    @OnMessage(type = MessageType.TEXT)
+    public SendMessage receiveDate(Message msg, ConversationContext ctx) {
+        String date = msg.text().trim();
+        ctx.transitionTo("WAITING_GUESTS", new BookingData(date, null));
+
+        return SendMessage.builder()
+                .chatId(msg.chat().id())
+                .text("Data: " + date + ". Quanti ospiti sarete?")
+                .replyMarkup(InlineKeyboard.of("2 persone", "guests_2", "4 persone", "guests_4"))
+                .build();
+    }
+
+    @OnState("WAITING_DATE")
+    @OnStateMismatch("WAITING_DATE")
+    public String dateMismatch() {
+        return "Formato data non valido! Invia una data di testo valida.";
+    }
+
+    @OnState("WAITING_GUESTS")
+    @OnCallbackQuery("guests_*")
+    public String confirmGuests(CallbackQuery query, @CallbackParam String num, ConversationContext ctx, BookingData data) {
+        ctx.complete();
+        return "Prenotazione confermata per " + num + " ospiti il " + data.date() + "!";
+    }
+
+    @TelegramCommand(value = "/annulla", interruptsState = true)
+    public String cancel(ConversationContext ctx) {
+        if (ctx.currentState().isEmpty()) {
+            return "Nessuna operazione in corso.";
+        }
+        ctx.complete();
+        return "Operazione annullata con successo.";
+    }
+}
+----
+
+== Configuration Reference
+
+include::includes/quarkus-telegram-bot.adoc[leveloffset=+1,opts=optional]
