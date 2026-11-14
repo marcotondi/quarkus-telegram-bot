@@ -83,3 +83,20 @@ public String start() { ... }
 ----
 
 Allowed values: `PRIVATE`, `GROUP`, `SUPERGROUP`, `CHANNEL`. Without the annotation, handlers accept every chat type.
+
+== Rate limiting
+
+Throttling is off by default. Enable it to drop updates from a user (or chat) that exceed a fixed request window:
+
+[source,properties]
+----
+quarkus.telegram.rate-limit.enabled=true
+quarkus.telegram.rate-limit.max-requests=20
+quarkus.telegram.rate-limit.window=1m
+quarkus.telegram.rate-limit.scope=USER
+quarkus.telegram.rate-limit.message=Too many requests, please slow down.
+----
+
+When the limit is exceeded the update is dropped before any handler or `@BeforeUpdate` interceptor runs. The configured `message` is sent once per window; further updates in the same window are dropped silently so the bot does not amplify the spam. Callback spinners are always answered.
+
+`scope=USER` counts updates per user id, `scope=CHAT` per chat id. The counters live in memory of the local instance: with several replicas each one throttles on its own.
