@@ -364,6 +364,111 @@ endif::add-copy-button-to-env-var[]
 |list of long
 |
 
+a| [[quarkus-telegram-bot_quarkus-telegram-rate-limit-enabled]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-rate-limit-enabled[`+++quarkus.telegram.rate-limit.enabled+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.telegram.rate-limit.enabled+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Whether incoming updates are throttled before dispatch.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_TELEGRAM_RATE_LIMIT_ENABLED+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_TELEGRAM_RATE_LIMIT_ENABLED+++`
+endif::add-copy-button-to-env-var[]
+--
+|boolean
+|`+++false+++`
+
+a| [[quarkus-telegram-bot_quarkus-telegram-rate-limit-max-requests]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-rate-limit-max-requests[`+++quarkus.telegram.rate-limit.max-requests+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.telegram.rate-limit.max-requests+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Maximum number of updates accepted from the same user (or chat) per window.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_TELEGRAM_RATE_LIMIT_MAX_REQUESTS+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_TELEGRAM_RATE_LIMIT_MAX_REQUESTS+++`
+endif::add-copy-button-to-env-var[]
+--
+|int
+|`+++20+++`
+
+a| [[quarkus-telegram-bot_quarkus-telegram-rate-limit-window]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-rate-limit-window[`+++quarkus.telegram.rate-limit.window+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.telegram.rate-limit.window+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Fixed window used to count requests.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_TELEGRAM_RATE_LIMIT_WINDOW+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_TELEGRAM_RATE_LIMIT_WINDOW+++`
+endif::add-copy-button-to-env-var[]
+--
+|link:https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/time/Duration.html[Duration] link:#duration-note-anchor-quarkus-telegram-bot_quarkus-telegram[icon:question-circle[title=More information about the Duration format]]
+|`+++1M+++`
+
+a| [[quarkus-telegram-bot_quarkus-telegram-rate-limit-scope]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-rate-limit-scope[`+++quarkus.telegram.rate-limit.scope+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.telegram.rate-limit.scope+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Throttling key: USER counts updates per user, CHAT per chat.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_TELEGRAM_RATE_LIMIT_SCOPE+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_TELEGRAM_RATE_LIMIT_SCOPE+++`
+endif::add-copy-button-to-env-var[]
+--
+a|`user`, `chat`
+|`+++user+++`
+
+a| [[quarkus-telegram-bot_quarkus-telegram-rate-limit-message]] [.property-path]##link:#quarkus-telegram-bot_quarkus-telegram-rate-limit-message[`+++quarkus.telegram.rate-limit.message+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.telegram.rate-limit.message+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Reply sent once per window when the limit is exceeded. Empty disables the reply.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_TELEGRAM_RATE_LIMIT_MESSAGE+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_TELEGRAM_RATE_LIMIT_MESSAGE+++`
+endif::add-copy-button-to-env-var[]
+--
+|string
+|`+++Too many requests, please slow down.+++`
+
 |===
 
 ifndef::no-duration-note[]

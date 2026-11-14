@@ -38,6 +38,7 @@ import io.quarkiverse.telegram.bot.runtime.model.SendChatAction;
 import io.quarkiverse.telegram.bot.runtime.model.SendMessage;
 import io.quarkiverse.telegram.bot.runtime.model.Update;
 import io.quarkiverse.telegram.bot.runtime.model.User;
+import io.quarkiverse.telegram.bot.runtime.ratelimit.RateLimiter;
 import io.quarkiverse.telegram.bot.runtime.session.ConversationContext;
 import io.quarkiverse.telegram.bot.runtime.session.ConversationContextImpl;
 import io.quarkiverse.telegram.bot.runtime.session.SessionKey;
@@ -57,6 +58,7 @@ public class UpdateDispatcher {
     private final TelegramBotConfig config;
     private final SessionStore sessionStore;
     private final TelegramRoleResolver roleResolver;
+    private final RateLimiter rateLimiter;
     private final Map<HandlerDescriptor, Method> methodCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<SessionKey, Uni<Void>> sessionLocks = new ConcurrentHashMap<>();
 
@@ -78,6 +80,9 @@ public class UpdateDispatcher {
         this.config = config;
         this.sessionStore = sessionStore;
         this.roleResolver = roleResolver;
+        this.rateLimiter = config.rateLimit().enabled()
+                ? new RateLimiter(config.rateLimit().maxRequests(), config.rateLimit().window())
+                : null;
 
         List<HandlerDescriptor> regular = new ArrayList<>();
         List<HandlerDescriptor> before = new ArrayList<>();
@@ -106,6 +111,17 @@ public class UpdateDispatcher {
     public Uni<Void> dispatch(Update update) {
         if (update == null) {
             return Uni.createFrom().voidItem();
+        }
+
+        if (rateLimiter != null) {
+            Long key = rateLimitKey(update);
+            if (key != null) {
+                rateLimiter.purgeExpired();
+                RateLimiter.Decision decision = rateLimiter.check(key);
+                if (decision != RateLimiter.Decision.ALLOWED) {
+                    return rejectRateLimited(update, key, decision);
+                }
+            }
         }
 
         SessionKey sessionKey = extractSessionKey(update);
@@ -272,6 +288,34 @@ public class UpdateDispatcher {
             Throwable cause = e instanceof InvocationTargetException ite && ite.getCause() != null ? ite.getCause() : e;
             return Uni.createFrom().failure(cause);
         }
+    }
+
+    private Long rateLimitKey(Update update) {
+        if (config.rateLimit().scope() == TelegramBotConfig.RateLimitScope.CHAT) {
+            Long chatId = extractChatId(update);
+            return chatId != null ? chatId : userId(update);
+        }
+        Long userId = userId(update);
+        return userId != null ? userId : extractChatId(update);
+    }
+
+    private Long userId(Update update) {
+        User user = extractUser(update);
+        return user != null ? user.id() : null;
+    }
+
+    private Uni<Void> rejectRateLimited(Update update, Long key, RateLimiter.Decision decision) {
+        LOG.warnf("[Telegram RateLimit] Update %s rejected for key %s (%s)",
+                update.updateId(), key, config.rateLimit().scope());
+        dismissCallbackQueryIfPresent(update);
+        Long chatId = extractChatId(update);
+        String message = config.rateLimit().message().orElse(null);
+        if (decision != RateLimiter.Decision.LIMITED || chatId == null || message == null || message.isBlank()) {
+            return Uni.createFrom().voidItem();
+        }
+        return client.sendMessage(chatId, message)
+                .replaceWithVoid()
+                .onFailure().recoverWithNull();
     }
 
     private void dismissCallbackQueryIfPresent(Update update) {

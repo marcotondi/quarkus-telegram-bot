@@ -68,7 +68,7 @@ Funzionalità avanzate pianificate per rilasci successivi:
   - Utility crittografica per validare a runtime l'hash `initData` generato dalle Web Apps di Telegram (HMAC-SHA256 con bot token).
 - [ ] **Simulatore Interattivo Web in Dev UI**:
   - Console interattiva browser per inviare comandi, messaggi ed eventi bottoni fittizi direttamente da `/q/dev-ui`.
-- [ ] **Rate Limiting Dinamico**:
+- [x] **Rate Limiting Dinamico**:
   - Filtro o interceptor per throttling automatico per utente/chat (ad es. per proteggere il bot da spam).
 
 ---

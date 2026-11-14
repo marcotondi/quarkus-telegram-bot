@@ -59,6 +59,11 @@ public interface TelegramBotConfig {
      */
     SecurityConfig security();
 
+    /**
+     * Per-user/per-chat throttling configuration.
+     */
+    RateLimitConfig rateLimit();
+
     enum TransportMode {
         AUTO,
         POLLING,
@@ -130,6 +135,43 @@ public interface TelegramBotConfig {
          */
         @WithDefault("15m")
         Duration ttl();
+    }
+
+    interface RateLimitConfig {
+        /**
+         * Whether incoming updates are throttled before dispatch.
+         */
+        @WithDefault("false")
+        boolean enabled();
+
+        /**
+         * Maximum number of updates accepted from the same user (or chat) per window.
+         */
+        @WithDefault("20")
+        int maxRequests();
+
+        /**
+         * Fixed window used to count requests.
+         */
+        @WithDefault("1m")
+        Duration window();
+
+        /**
+         * Throttling key: USER counts updates per user, CHAT per chat.
+         */
+        @WithDefault("USER")
+        RateLimitScope scope();
+
+        /**
+         * Reply sent once per window when the limit is exceeded. Empty disables the reply.
+         */
+        @WithDefault("Too many requests, please slow down.")
+        Optional<String> message();
+    }
+
+    enum RateLimitScope {
+        USER,
+        CHAT
     }
 
     /**

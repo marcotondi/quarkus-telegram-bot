@@ -22,6 +22,11 @@ Summary of every property the extension reads. The generated tables below this s
 |`quarkus.telegram.webhook.auto-register` |runtime |`true` |Calls `setWebhook` on startup when `public-url` is set.
 |`quarkus.telegram.session.ttl` |runtime |`15m` |Expiry for inactive conversations.
 |`quarkus.telegram.security.admin-ids` |runtime |none |Comma-separated Telegram user IDs that get the `admin` role.
+|`quarkus.telegram.rate-limit.enabled` |runtime |`false` |Throttle incoming updates per user/chat before dispatch.
+|`quarkus.telegram.rate-limit.max-requests` |runtime |`20` |Updates accepted per key and window.
+|`quarkus.telegram.rate-limit.window` |runtime |`1m` |Fixed counting window.
+|`quarkus.telegram.rate-limit.scope` |runtime |`USER` |`USER` (per user id) or `CHAT` (per chat id).
+|`quarkus.telegram.rate-limit.message` |runtime |`Too many requests, please slow down.` |Reply sent once per window when throttled; empty disables it.
 |`quarkus.telegram.webhook.enabled` |build time |`true` |Whether the webhook route is mounted.
 |`quarkus.telegram.webhook.path` |build time |`/telegram/webhook` |Path of the webhook route.
 |`quarkus.telegram.session.store` |build time |`memory` |`memory` or `redis`; see xref:conversations.adoc#redis-and-devservices[Redis and DevServices].
