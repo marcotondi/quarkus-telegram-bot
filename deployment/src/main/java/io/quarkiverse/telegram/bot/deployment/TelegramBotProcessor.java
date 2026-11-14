@@ -17,12 +17,14 @@ import io.quarkiverse.telegram.bot.runtime.TelegramBotRecorder;
 import io.quarkiverse.telegram.bot.runtime.api.MessageType;
 import io.quarkiverse.telegram.bot.runtime.api.OnCallbackQuery;
 import io.quarkiverse.telegram.bot.runtime.api.OnChosenInlineResult;
+import io.quarkiverse.telegram.bot.runtime.api.OnError;
 import io.quarkiverse.telegram.bot.runtime.api.OnInlineQuery;
 import io.quarkiverse.telegram.bot.runtime.api.OnMessage;
 import io.quarkiverse.telegram.bot.runtime.api.OnState;
 import io.quarkiverse.telegram.bot.runtime.api.OnStateMismatch;
 import io.quarkiverse.telegram.bot.runtime.api.SessionPayload;
 import io.quarkiverse.telegram.bot.runtime.api.TelegramCommand;
+import io.quarkiverse.telegram.bot.runtime.api.TelegramExceptionHandler;
 import io.quarkiverse.telegram.bot.runtime.client.TelegramBotClient;
 import io.quarkiverse.telegram.bot.runtime.config.TelegramBotBuildTimeConfig;
 import io.quarkiverse.telegram.bot.runtime.dispatcher.HandlerDescriptor;
@@ -64,6 +66,8 @@ class TelegramBotProcessor {
     private static final DotName ON_STATE_MISMATCH = DotName.createSimple(OnStateMismatch.class.getName());
     private static final DotName ON_INLINE_QUERY = DotName.createSimple(OnInlineQuery.class.getName());
     private static final DotName ON_CHOSEN_INLINE_RESULT = DotName.createSimple(OnChosenInlineResult.class.getName());
+    private static final DotName ON_ERROR = DotName.createSimple(OnError.class.getName());
+    private static final DotName TELEGRAM_EXCEPTION_HANDLER = DotName.createSimple(TelegramExceptionHandler.class.getName());
     private static final DotName SESSION_PAYLOAD = DotName.createSimple(SessionPayload.class.getName());
 
     @BuildStep
@@ -242,6 +246,48 @@ class TelegramBotProcessor {
                     false,
                     null,
                     null)));
+        }
+
+        // Scan @OnError
+        for (AnnotationInstance ann : index.getIndex().getAnnotations(ON_ERROR)) {
+            MethodInfo method = ann.target().asMethod();
+            registerMethodAndClass(method, reflectiveMethods, reflectiveClasses);
+            botClasses.add(method.declaringClass().name().toString());
+
+            AnnotationValue val = ann.value();
+            String exType = val != null ? val.asClass().name().toString() : Throwable.class.getName();
+
+            handlers.produce(new HandlerBuildItem(new HandlerDescriptor(
+                    HandlerType.ERROR,
+                    exType,
+                    method.declaringClass().name().toString(),
+                    method.name(),
+                    extractParameterTypes(method),
+                    false,
+                    null,
+                    null)));
+        }
+
+        // Scan TelegramExceptionHandler implementors
+        for (ClassInfo clazz : index.getIndex().getAllKnownImplementors(TELEGRAM_EXCEPTION_HANDLER)) {
+            reflectiveClasses.produce(ReflectiveClassBuildItem.builder(clazz.name().toString())
+                    .constructors().methods().fields().build());
+            botClasses.add(clazz.name().toString());
+
+            for (MethodInfo method : clazz.methods()) {
+                if (method.name().equals("handle") && method.parametersCount() == 3) {
+                    String exType = method.parameterType(0).name().toString();
+                    handlers.produce(new HandlerBuildItem(new HandlerDescriptor(
+                            HandlerType.ERROR,
+                            exType,
+                            clazz.name().toString(),
+                            method.name(),
+                            extractParameterTypes(method),
+                            false,
+                            null,
+                            null)));
+                }
+            }
         }
 
         unremovableBeans

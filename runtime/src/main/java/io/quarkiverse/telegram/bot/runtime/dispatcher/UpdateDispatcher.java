@@ -1,13 +1,16 @@
 package io.quarkiverse.telegram.bot.runtime.dispatcher;
 
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.jboss.logging.Logger;
+import org.jboss.logging.MDC;
 
 import io.quarkiverse.telegram.bot.runtime.api.MessageType;
 import io.quarkiverse.telegram.bot.runtime.client.TelegramBotClient;
@@ -63,7 +66,9 @@ public class UpdateDispatcher {
 
         SessionKey sessionKey = extractSessionKey(update);
         if (sessionKey == null) {
-            return processUpdate(update, null, null);
+            AtomicReference<String> failingBeanClass = new AtomicReference<>();
+            return processUpdate(update, null, null, failingBeanClass)
+                    .onFailure().recoverWithUni(error -> handleError(error, update, null, failingBeanClass.get()));
         }
 
         AtomicReference<Uni<Void>> ref = new AtomicReference<>();
@@ -86,6 +91,7 @@ public class UpdateDispatcher {
     }
 
     private Uni<Void> doDispatch(Update update, SessionKey sessionKey) {
+        AtomicReference<String> failingBeanClass = new AtomicReference<>();
         return sessionStore.acquireLock(sessionKey, Duration.ofSeconds(15))
                 .flatMap(locked -> sessionStore.load(sessionKey)
                         .flatMap(snapshotOpt -> {
@@ -95,8 +101,10 @@ public class UpdateDispatcher {
                                     sessionStore,
                                     client.objectMapper(),
                                     config.session().ttl());
-                            return processUpdate(update, sessionKey, ctx)
-                                    .flatMap(v -> persistContext(ctx));
+                            return processUpdate(update, sessionKey, ctx, failingBeanClass)
+                                    .flatMap(v -> persistContext(ctx))
+                                    .onFailure()
+                                    .recoverWithUni(error -> handleError(error, update, ctx, failingBeanClass.get()));
                         }))
                 .eventually(() -> sessionStore.releaseLock(sessionKey));
     }
@@ -123,7 +131,11 @@ public class UpdateDispatcher {
         }
     }
 
-    private Uni<Void> processUpdate(Update update, SessionKey sessionKey, ConversationContextImpl ctx) {
+    private Uni<Void> processUpdate(
+            Update update,
+            SessionKey sessionKey,
+            ConversationContextImpl ctx,
+            AtomicReference<String> failingBeanClass) {
         InlineQuery inlineQuery = update.inlineQuery();
         ChosenInlineResult chosenInlineResult = update.chosenInlineResult();
 
@@ -132,7 +144,7 @@ public class UpdateDispatcher {
                 if (h.getType() == HandlerType.INLINE_QUERY) {
                     MatchResult match = matchPattern(h.getMatchValue(), inlineQuery.query());
                     if (match.matches()) {
-                        return invokeHandler(h, update, ctx, match.param());
+                        return invokeHandler(h, update, ctx, match.param(), failingBeanClass);
                     }
                 }
             }
@@ -144,7 +156,7 @@ public class UpdateDispatcher {
                 if (h.getType() == HandlerType.CHOSEN_INLINE_RESULT) {
                     MatchResult match = matchPattern(h.getMatchValue(), chosenInlineResult.resultId());
                     if (match.matches()) {
-                        return invokeHandler(h, update, ctx, match.param());
+                        return invokeHandler(h, update, ctx, match.param(), failingBeanClass);
                     }
                 }
             }
@@ -161,7 +173,7 @@ public class UpdateDispatcher {
             for (HandlerDescriptor h : handlers) {
                 if (h.getType() == HandlerType.COMMAND && h.isInterruptsState()
                         && matchesCommand(h.getMatchValue(), rawCommand)) {
-                    return invokeHandler(h, update, ctx, null);
+                    return invokeHandler(h, update, ctx, null, failingBeanClass);
                 }
             }
         }
@@ -174,7 +186,7 @@ public class UpdateDispatcher {
                 for (HandlerDescriptor h : handlers) {
                     if (h.getType() == HandlerType.COMMAND && matchesCommand(h.getMatchValue(), rawCommand)
                             && currentState.equals(h.getStateCondition())) {
-                        return invokeHandler(h, update, ctx, null);
+                        return invokeHandler(h, update, ctx, null, failingBeanClass);
                     }
                 }
             }
@@ -184,11 +196,11 @@ public class UpdateDispatcher {
                     if (callbackQuery != null && h.getType() == HandlerType.CALLBACK_QUERY) {
                         MatchResult match = matchPattern(h.getMatchValue(), callbackQuery.data());
                         if (match.matches()) {
-                            return invokeHandler(h, update, ctx, match.param());
+                            return invokeHandler(h, update, ctx, match.param(), failingBeanClass);
                         }
                     } else if (message != null && h.getType() == HandlerType.MESSAGE) {
                         if (matchesMessageType(h.getMessageType(), message)) {
-                            return invokeHandler(h, update, ctx, null);
+                            return invokeHandler(h, update, ctx, null, failingBeanClass);
                         }
                     }
                 }
@@ -198,12 +210,12 @@ public class UpdateDispatcher {
             // First look for state-specific mismatch handler, then fallback/global mismatch handler
             for (HandlerDescriptor h : handlers) {
                 if (h.getType() == HandlerType.STATE_MISMATCH && currentState.equals(h.getStateCondition())) {
-                    return invokeHandler(h, update, ctx, null);
+                    return invokeHandler(h, update, ctx, null, failingBeanClass);
                 }
             }
             for (HandlerDescriptor h : handlers) {
                 if (h.getType() == HandlerType.STATE_MISMATCH && h.getStateCondition() == null) {
-                    return invokeHandler(h, update, ctx, null);
+                    return invokeHandler(h, update, ctx, null, failingBeanClass);
                 }
             }
 
@@ -220,7 +232,7 @@ public class UpdateDispatcher {
                 for (HandlerDescriptor h : handlers) {
                     if (h.getType() == HandlerType.COMMAND && h.getStateCondition() == null
                             && matchesCommand(h.getMatchValue(), rawCommand)) {
-                        return invokeHandler(h, update, ctx, null);
+                        return invokeHandler(h, update, ctx, null, failingBeanClass);
                     }
                 }
             }
@@ -233,7 +245,7 @@ public class UpdateDispatcher {
                 if (h.getType() == HandlerType.CALLBACK_QUERY && h.getStateCondition() == null) {
                     MatchResult match = matchPattern(h.getMatchValue(), callbackQuery.data());
                     if (match.matches()) {
-                        return invokeHandler(h, update, ctx, match.param());
+                        return invokeHandler(h, update, ctx, match.param(), failingBeanClass);
                     }
                 }
             }
@@ -244,7 +256,7 @@ public class UpdateDispatcher {
             for (HandlerDescriptor h : handlers) {
                 if (h.getType() == HandlerType.MESSAGE && h.getStateCondition() == null) {
                     if (matchesMessageType(h.getMessageType(), message)) {
-                        return invokeHandler(h, update, ctx, null);
+                        return invokeHandler(h, update, ctx, null, failingBeanClass);
                     }
                 }
             }
@@ -257,7 +269,18 @@ public class UpdateDispatcher {
             HandlerDescriptor descriptor,
             Update update,
             ConversationContext ctx,
-            String callbackParam) {
+            String callbackParam,
+            AtomicReference<String> failingBeanClass) {
+        return invokeHandler(descriptor, update, ctx, callbackParam, null, failingBeanClass);
+    }
+
+    private Uni<Void> invokeHandler(
+            HandlerDescriptor descriptor,
+            Update update,
+            ConversationContext ctx,
+            String callbackParam,
+            Throwable error,
+            AtomicReference<String> failingBeanClass) {
         try {
             Class<?> beanClass = Thread.currentThread().getContextClassLoader().loadClass(descriptor.getClassName());
             Object beanInstance = Arc.container().instance(beanClass).get();
@@ -267,13 +290,21 @@ public class UpdateDispatcher {
             }
 
             Method method = getMethod(descriptor, beanClass);
-            Object[] args = resolveArgs(method, descriptor, update, ctx, callbackParam);
+            Object[] args = resolveArgs(method, descriptor, update, ctx, callbackParam, error);
 
             Object result = method.invoke(beanInstance, args);
-            return handleResult(result, extractChatId(update), update);
+            Uni<Void> resultUni = handleResult(result, extractChatId(update), update);
+            return resultUni.onFailure().invoke(err -> {
+                if (failingBeanClass != null) {
+                    failingBeanClass.set(descriptor.getClassName());
+                }
+            });
         } catch (Exception e) {
-            LOG.errorf(e, "Error executing handler %s#%s", descriptor.getClassName(), descriptor.getMethodName());
-            return Uni.createFrom().failure(e);
+            if (failingBeanClass != null) {
+                failingBeanClass.set(descriptor.getClassName());
+            }
+            Throwable cause = e instanceof InvocationTargetException ite && ite.getCause() != null ? ite.getCause() : e;
+            return Uni.createFrom().failure(cause);
         }
     }
 
@@ -405,32 +436,35 @@ public class UpdateDispatcher {
             HandlerDescriptor descriptor,
             Update update,
             ConversationContext ctx,
-            String callbackParam) {
+            String callbackParam,
+            Throwable error) {
         Class<?>[] paramTypes = method.getParameterTypes();
         Object[] args = new Object[paramTypes.length];
 
         for (int i = 0; i < paramTypes.length; i++) {
             Class<?> pt = paramTypes[i];
-            if (Update.class.isAssignableFrom(pt)) {
+            if (error != null && Throwable.class.isAssignableFrom(pt) && pt.isAssignableFrom(error.getClass())) {
+                args[i] = error;
+            } else if (Update.class.isAssignableFrom(pt)) {
                 args[i] = update;
             } else if (InlineQuery.class.isAssignableFrom(pt)) {
-                args[i] = update.inlineQuery();
+                args[i] = update != null ? update.inlineQuery() : null;
             } else if (ChosenInlineResult.class.isAssignableFrom(pt)) {
-                args[i] = update.chosenInlineResult();
+                args[i] = update != null ? update.chosenInlineResult() : null;
             } else if (Message.class.isAssignableFrom(pt)) {
-                if (update.message() != null) {
+                if (update != null && update.message() != null) {
                     args[i] = update.message();
-                } else if (update.callbackQuery() != null
+                } else if (update != null && update.callbackQuery() != null
                         && update.callbackQuery().message() instanceof Message msg) {
                     args[i] = msg;
                 } else {
                     args[i] = null;
                 }
             } else if (MaybeInaccessibleMessage.class.isAssignableFrom(pt)) {
-                args[i] = update.message() != null ? update.message()
-                        : (update.callbackQuery() != null ? update.callbackQuery().message() : null);
+                args[i] = update != null && update.message() != null ? update.message()
+                        : (update != null && update.callbackQuery() != null ? update.callbackQuery().message() : null);
             } else if (CallbackQuery.class.isAssignableFrom(pt)) {
-                args[i] = update.callbackQuery();
+                args[i] = update != null ? update.callbackQuery() : null;
             } else if (User.class.isAssignableFrom(pt)) {
                 args[i] = extractUser(update);
             } else if (Chat.class.isAssignableFrom(pt)) {
@@ -440,9 +474,9 @@ public class UpdateDispatcher {
             } else if (ConversationContext.class.isAssignableFrom(pt)) {
                 args[i] = ctx;
             } else if (String.class.isAssignableFrom(pt)) {
-                if (update.inlineQuery() != null) {
+                if (update != null && update.inlineQuery() != null) {
                     args[i] = callbackParam != null ? callbackParam : update.inlineQuery().query();
-                } else if (update.chosenInlineResult() != null) {
+                } else if (update != null && update.chosenInlineResult() != null) {
                     args[i] = callbackParam != null ? callbackParam : update.chosenInlineResult().resultId();
                 } else {
                     args[i] = callbackParam;
@@ -454,6 +488,125 @@ public class UpdateDispatcher {
             }
         }
         return args;
+    }
+
+    private Uni<Void> handleError(Throwable error, Update update, ConversationContext ctx, String failingBeanClass) {
+        Throwable rootError = error;
+        while (rootError instanceof InvocationTargetException ite && ite.getCause() != null) {
+            rootError = ite.getCause();
+        }
+        while (rootError instanceof CompletionException ce && ce.getCause() != null) {
+            rootError = ce.getCause();
+        }
+
+        Long updateId = update != null ? (long) update.updateId() : null;
+        Long chatId = extractChatId(update);
+        User user = extractUser(update);
+        Long userId = user != null ? user.id() : null;
+
+        try {
+            if (updateId != null) {
+                MDC.put("telegram.update_id", String.valueOf(updateId));
+            }
+            if (chatId != null) {
+                MDC.put("telegram.chat_id", String.valueOf(chatId));
+            }
+            if (userId != null) {
+                MDC.put("telegram.user_id", String.valueOf(userId));
+            }
+
+            recordOpenTelemetry(rootError, updateId, chatId, userId);
+
+            LOG.errorf(rootError,
+                    "[Telegram Error] [update_id=%s, chat_id=%s, user_id=%s] Error during update dispatch: %s",
+                    updateId, chatId, userId, rootError.getMessage());
+        } finally {
+            MDC.remove("telegram.update_id");
+            MDC.remove("telegram.chat_id");
+            MDC.remove("telegram.user_id");
+        }
+
+        final Throwable finalError = rootError;
+        HandlerDescriptor bestHandler = findBestErrorHandler(finalError, failingBeanClass);
+        if (bestHandler == null) {
+            if (update != null && update.callbackQuery() != null) {
+                return client.answerCallbackQuery(update.callbackQuery().id())
+                        .replaceWithVoid()
+                        .onFailure().recoverWithNull()
+                        .chain(() -> Uni.createFrom().failure(finalError));
+            }
+            return Uni.createFrom().failure(finalError);
+        }
+
+        return invokeHandler(bestHandler, update, ctx, null, finalError, null)
+                .onFailure().invoke(handlerErr -> LOG.errorf(handlerErr, "Error executing @OnError handler %s#%s",
+                        bestHandler.getClassName(), bestHandler.getMethodName()));
+    }
+
+    private void recordOpenTelemetry(Throwable error, Long updateId, Long chatId, Long userId) {
+        try {
+            ClassLoader cl = Thread.currentThread().getContextClassLoader();
+            Class<?> spanClass = cl.loadClass("io.opentelemetry.api.trace.Span");
+            Method currentMethod = spanClass.getMethod("current");
+            Object currentSpan = currentMethod.invoke(null);
+            if (currentSpan != null) {
+                Method setAttribute = spanClass.getMethod("setAttribute", String.class, String.class);
+                if (updateId != null) {
+                    setAttribute.invoke(currentSpan, "telegram.update_id", String.valueOf(updateId));
+                }
+                if (chatId != null) {
+                    setAttribute.invoke(currentSpan, "telegram.chat_id", String.valueOf(chatId));
+                }
+                if (userId != null) {
+                    setAttribute.invoke(currentSpan, "telegram.user_id", String.valueOf(userId));
+                }
+                Method recordException = spanClass.getMethod("recordException", Throwable.class);
+                recordException.invoke(currentSpan, error);
+            }
+        } catch (Throwable ignored) {
+            // OpenTelemetry API not active or not present on classpath
+        }
+    }
+
+    private HandlerDescriptor findBestErrorHandler(Throwable rootError, String failingBeanClass) {
+        HandlerDescriptor best = null;
+        int bestDistance = Integer.MAX_VALUE;
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+
+        for (HandlerDescriptor h : handlers) {
+            if (h.getType() == HandlerType.ERROR) {
+                try {
+                    Class<?> targetClass = cl.loadClass(h.getMatchValue());
+                    int dist = exceptionDistance(rootError.getClass(), targetClass);
+                    if (dist >= 0) {
+                        int effectiveDist = dist
+                                + (failingBeanClass != null && failingBeanClass.equals(h.getClassName()) ? 0 : 1000);
+                        if (effectiveDist < bestDistance) {
+                            bestDistance = effectiveDist;
+                            best = h;
+                        }
+                    }
+                } catch (ClassNotFoundException ignored) {
+                }
+            }
+        }
+        return best;
+    }
+
+    private int exceptionDistance(Class<?> actualClass, Class<?> handlerTargetClass) {
+        if (!handlerTargetClass.isAssignableFrom(actualClass)) {
+            return -1;
+        }
+        int distance = 0;
+        Class<?> current = actualClass;
+        while (current != null) {
+            if (current.equals(handlerTargetClass)) {
+                return distance;
+            }
+            distance++;
+            current = current.getSuperclass();
+        }
+        return Integer.MAX_VALUE;
     }
 
     private SessionKey extractSessionKey(Update update) {

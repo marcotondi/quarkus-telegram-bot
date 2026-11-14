@@ -3,14 +3,17 @@ package io.quarkiverse.telegram.bot.it;
 import java.util.List;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import io.quarkiverse.telegram.bot.runtime.api.CallbackParam;
 import io.quarkiverse.telegram.bot.runtime.api.MessageType;
 import io.quarkiverse.telegram.bot.runtime.api.OnCallbackQuery;
 import io.quarkiverse.telegram.bot.runtime.api.OnChosenInlineResult;
+import io.quarkiverse.telegram.bot.runtime.api.OnError;
 import io.quarkiverse.telegram.bot.runtime.api.OnInlineQuery;
 import io.quarkiverse.telegram.bot.runtime.api.OnMessage;
 import io.quarkiverse.telegram.bot.runtime.api.TelegramCommand;
+import io.quarkiverse.telegram.bot.runtime.client.TelegramBotClient;
 import io.quarkiverse.telegram.bot.runtime.model.AnswerCallbackQuery;
 import io.quarkiverse.telegram.bot.runtime.model.AnswerInlineQuery;
 import io.quarkiverse.telegram.bot.runtime.model.CallbackQuery;
@@ -24,7 +27,10 @@ import io.quarkiverse.telegram.bot.runtime.model.InlineQueryResultArticle;
 import io.quarkiverse.telegram.bot.runtime.model.InputTextMessageContent;
 import io.quarkiverse.telegram.bot.runtime.model.Message;
 import io.quarkiverse.telegram.bot.runtime.model.SendMessage;
+import io.quarkiverse.telegram.bot.runtime.model.Update;
 import io.quarkiverse.telegram.bot.runtime.model.User;
+import io.quarkiverse.telegram.bot.runtime.session.ConversationContext;
+import io.smallrye.mutiny.Uni;
 
 @ApplicationScoped
 public class SampleBot {
@@ -121,5 +127,68 @@ public class SampleBot {
     @OnChosenInlineResult("*")
     public void onChosenInlineResult(ChosenInlineResult chosen) {
         LAST_CHOSEN_RESULT.set(chosen);
+    }
+
+    @Inject
+    TelegramBotClient botClient;
+
+    public static class CustomValidationException extends RuntimeException {
+        public CustomValidationException(String msg) {
+            super(msg);
+        }
+    }
+
+    public static class ScopedTestException extends RuntimeException {
+        public ScopedTestException(String msg) {
+            super(msg);
+        }
+    }
+
+    public static class OrderException extends RuntimeException {
+        public OrderException(String msg) {
+            super(msg);
+        }
+    }
+
+    public static class AsyncFailureException extends RuntimeException {
+        public AsyncFailureException(String msg) {
+            super(msg);
+        }
+    }
+
+    @TelegramCommand("/error-validation")
+    public String onErrorValidation() {
+        throw new CustomValidationException("Parametro mancante");
+    }
+
+    @OnError(CustomValidationException.class)
+    public String handleValidation(CustomValidationException ex) {
+        return "Cortesia: " + ex.getMessage();
+    }
+
+    @TelegramCommand("/error-scoped")
+    public String onErrorScoped() {
+        throw new ScopedTestException("Test Scoped");
+    }
+
+    @OnError(ScopedTestException.class)
+    public String handleScoped(ScopedTestException ex) {
+        return "Scoped: " + ex.getMessage();
+    }
+
+    @TelegramCommand("/error-order")
+    public String onErrorOrder() {
+        throw new OrderException("Ordine non valido");
+    }
+
+    @TelegramCommand("/error-async")
+    public Uni<String> onErrorAsync() {
+        return Uni.createFrom().failure(new AsyncFailureException("Async failure occurred"));
+    }
+
+    @OnError(AsyncFailureException.class)
+    public Uni<Void> handleAsync(AsyncFailureException ex, Update update, ConversationContext ctx) {
+        Long chatId = update.message().chat().id();
+        return botClient.sendMessage(chatId, "AsyncHandled: " + ex.getMessage()).replaceWithVoid();
     }
 }

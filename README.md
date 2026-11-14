@@ -95,6 +95,11 @@ public class GreetingBot {
                 .build()
         );
     }
+
+    @OnError(IllegalArgumentException.class)
+    public String onValidation(IllegalArgumentException ex) {
+        return "Attenzione: " + ex.getMessage();
+    }
 }
 ```
 

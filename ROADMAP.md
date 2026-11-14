@@ -35,11 +35,12 @@ Completare la copertura dell'API REST in `TelegramBotApi` e `TelegramBotClient` 
 ### 2. Gestione Centralizzata delle Eccezioni (`@OnError`)
 Introdurre un meccanismo dichiarativo ed ergonomico per catturare errori imprevisti negli handler CDI:
 
-- [ ] **Annotazione `@OnError` / `TelegramExceptionHandler`**:
-  - Possibilità di definire un metodo globale o scoped per intercettare qualsiasi eccezione lanciata durante la catena di dispatch.
-  - Firma supportata: `Uni<Void> onError(Throwable error, Update update, ConversationContext ctx)`.
-  - Invio automatico di un messaggio di errore localizzato o di cortesia all'utente.
-  - Logging strutturato con OpenTelemetry tracing / correlation ID Telegram.
+- [x] **Annotazione `@OnError` / `TelegramExceptionHandler`**:
+  - Definizione di metodi di gestione errori scoped (nello stesso bean del bot) o globali con priorità alla classe e per specificità dell'eccezione (minima distanza gerarchica).
+  - Interfaccia CDI `TelegramExceptionHandler<T extends Throwable>` per registrare handler globali tramite iniezione delle dipendenze.
+  - Firme supportate flessibili: `(Throwable error, Update update, ConversationContext ctx, User user, Chat chat, TelegramBotClient client, Message message)`.
+  - Invio automatico del messaggio di cortesia o localizzato quando l'handler restituisce `String`, `SendMessage` o `Uni<?>`.
+  - Logging strutturato con MDC (`telegram.update_id`, `telegram.chat_id`, `telegram.user_id`) e tracciamento automatico OpenTelemetry span (se attivo).
 
 ---
 
