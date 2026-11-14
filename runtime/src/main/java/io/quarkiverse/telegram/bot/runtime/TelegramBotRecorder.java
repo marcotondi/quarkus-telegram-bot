@@ -61,9 +61,6 @@ public class TelegramBotRecorder {
             status.setTransport(TelegramBotStatus.Transport.NONE);
             return;
         }
-        if (!webhookEnabled) {
-            status.setTransport(TelegramBotStatus.Transport.NONE);
-        }
 
         // Register bot commands with Telegram if any @TelegramCommand annotations had descriptions
         if (commands != null && !commands.isEmpty()) {
@@ -78,6 +75,11 @@ public class TelegramBotRecorder {
                 || (mode == TelegramBotConfig.TransportMode.AUTO && !launchMode.isDevOrTest());
 
         if (isWebhook) {
+            if (!webhookEnabled) {
+                status.setTransport(TelegramBotStatus.Transport.NONE);
+                LOG.info("Telegram transport is configured as WEBHOOK but webhook route is disabled. No transport active.");
+                return;
+            }
             status.setTransport(TelegramBotStatus.Transport.WEBHOOK);
             // Check secret token requirement in production
             if (config.webhook().requireSecretToken() && config.webhook().secretToken().isEmpty()

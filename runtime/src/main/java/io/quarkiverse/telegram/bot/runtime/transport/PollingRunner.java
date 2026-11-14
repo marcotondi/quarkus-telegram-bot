@@ -94,6 +94,7 @@ public class PollingRunner {
 
         GetUpdatesRequest req = new GetUpdatesRequest(offset, limit, timeoutSec);
         client.getUpdates(req)
+                .onFailure().invoke(error -> status.setLastError("polling: " + error.getMessage()))
                 .onFailure().retry().withBackOff(Duration.ofSeconds(2), Duration.ofSeconds(10)).atMost(10)
                 .flatMap(updates -> {
                     if (updates == null || updates.isEmpty() || !running.get()) {

@@ -344,7 +344,7 @@ class TelegramBotProcessor {
             botClasses.add(clazz.name().toString());
 
             for (MethodInfo method : clazz.methods()) {
-                if (method.name().equals("handle") && method.parametersCount() == 3) {
+                if (method.name().equals("handle") && method.parametersCount() == 3 && !method.isSynthetic()) {
                     String exType = method.parameterType(0).name().toString();
                     handlers.produce(new HandlerBuildItem(new HandlerDescriptor(
                             HandlerType.ERROR,

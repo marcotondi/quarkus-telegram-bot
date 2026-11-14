@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
@@ -24,6 +25,7 @@ import io.quarkiverse.telegram.bot.runtime.api.OnChosenInlineResult;
 import io.quarkiverse.telegram.bot.runtime.api.OnError;
 import io.quarkiverse.telegram.bot.runtime.api.OnInlineQuery;
 import io.quarkiverse.telegram.bot.runtime.api.OnMessage;
+import io.quarkiverse.telegram.bot.runtime.api.OnStateMismatch;
 import io.quarkiverse.telegram.bot.runtime.api.SessionPayload;
 import io.quarkiverse.telegram.bot.runtime.api.TelegramCommand;
 import io.quarkiverse.telegram.bot.runtime.dispatcher.HandlerType;
@@ -41,11 +43,12 @@ final class HandlerValidator {
     private static final DotName ON_ERROR = DotName.createSimple(OnError.class.getName());
     private static final DotName BEFORE_UPDATE = DotName.createSimple(BeforeUpdate.class.getName());
     private static final DotName AFTER_UPDATE = DotName.createSimple(AfterUpdate.class.getName());
+    private static final DotName ON_STATE_MISMATCH = DotName.createSimple(OnStateMismatch.class.getName());
     private static final DotName SESSION_PAYLOAD = DotName.createSimple(SessionPayload.class.getName());
 
     private static final List<DotName> HANDLER_ANNOTATIONS = List.of(
             TELEGRAM_COMMAND, ON_MESSAGE, ON_CALLBACK_QUERY, ON_INLINE_QUERY, ON_CHOSEN_INLINE_RESULT,
-            ON_ERROR, BEFORE_UPDATE, AFTER_UPDATE);
+            ON_ERROR, BEFORE_UPDATE, AFTER_UPDATE, ON_STATE_MISMATCH);
 
     private static final Set<DotName> INJECTABLE_PARAMS = DotNames.of(
             "io.quarkiverse.telegram.bot.runtime.model.Update",
@@ -120,22 +123,35 @@ final class HandlerValidator {
                 throw new IllegalStateException("@Telegram handler " + location
                         + " declares a Throwable parameter; only @OnError handlers may receive exceptions");
             }
-            if (INJECTABLE_PARAMS.contains(name) || payloads.contains(name)) {
+            if (isAllowedParameter(parameter, payloads)) {
                 continue;
             }
             throw new IllegalStateException("@Telegram handler " + location + " has unsupported parameter type " + name
                     + ". Supported: Update, Message, CallbackQuery, InlineQuery, ChosenInlineResult, User, Chat,"
-                    + " TelegramBotClient, ConversationContext, String and @SessionPayload types");
+                    + " TelegramBotClient, ConversationContext, String and session payload types");
         }
 
         Type returnType = method.returnType();
-        if (isVoid(returnType)) {
-            return;
+
+        if (beforeUpdate) {
+            if (isVoid(returnType) || isBoolean(returnType) || isUniOf(returnType, HandlerValidator::isBooleanOrVoid)) {
+                return;
+            }
+            throw new IllegalStateException("@Telegram @BeforeUpdate interceptor " + location
+                    + " returns unsupported type " + returnType
+                    + ". Supported for @BeforeUpdate: void, boolean, Uni<Boolean>, Uni<Void>");
         }
-        if (beforeUpdate && isBoolean(returnType)) {
-            return;
+
+        if (afterUpdate) {
+            if (isVoid(returnType) || isUniOf(returnType, HandlerValidator::isVoid)) {
+                return;
+            }
+            throw new IllegalStateException("@Telegram @AfterUpdate interceptor " + location
+                    + " returns unsupported type " + returnType
+                    + ". Supported for @AfterUpdate: void, Uni<Void>");
         }
-        if (isValidResult(returnType, beforeUpdate)) {
+
+        if (isVoid(returnType) || isValidResult(returnType)) {
             return;
         }
         throw new IllegalStateException("@Telegram handler " + location + " returns unsupported type " + returnType
@@ -144,20 +160,53 @@ final class HandlerValidator {
                 + " List<InlineQueryResult> and Uni<T> of those");
     }
 
-    private static boolean isValidResult(Type type, boolean beforeUpdate) {
+    private static boolean isAllowedParameter(Type parameter, Set<DotName> payloads) {
+        DotName name = parameter.name();
+        if (INJECTABLE_PARAMS.contains(name) || payloads.contains(name)) {
+            return true;
+        }
+        if (parameter.kind() == Type.Kind.PRIMITIVE || parameter.kind() == Type.Kind.ARRAY) {
+            return false;
+        }
+        String className = name.toString();
+        // Reject JDK, Jakarta, and internal extension types not listed in INJECTABLE_PARAMS
+        if (className.startsWith("java.")
+                || className.startsWith("javax.")
+                || className.startsWith("jakarta.")
+                || className.startsWith("io.quarkiverse.telegram.bot.runtime.")) {
+            return false;
+        }
+        // Custom application records and classes are allowed as session payloads
+        return true;
+    }
+
+    private static boolean isValidResult(Type type) {
         return switch (type.kind()) {
-            case CLASS -> HANDLER_RESULTS.contains(type.name())
-                    || (beforeUpdate && type.name().equals(DotName.createSimple("java.lang.Boolean")));
+            case CLASS -> HANDLER_RESULTS.contains(type.name());
             case PARAMETERIZED_TYPE -> {
                 if (type.name().equals(UNI)) {
                     Type inner = type.asParameterizedType().arguments().get(0);
-                    yield isVoid(inner) || isValidResult(inner, beforeUpdate);
+
+                    yield isVoid(inner) || isValidResult(inner);
                 }
+
                 yield type.name().equals(LIST)
                         && type.asParameterizedType().arguments().get(0).name().equals(INLINE_QUERY_RESULT);
             }
             default -> false;
         };
+    }
+
+    private static boolean isBooleanOrVoid(Type type) {
+        return isBoolean(type) || isVoid(type);
+    }
+
+    private static boolean isUniOf(Type type, Predicate<Type> innerPredicate) {
+        if (type.kind() == Type.Kind.PARAMETERIZED_TYPE && type.name().equals(UNI)) {
+            Type inner = type.asParameterizedType().arguments().get(0);
+            return innerPredicate.test(inner);
+        }
+        return false;
     }
 
     private static boolean isVoid(Type type) {

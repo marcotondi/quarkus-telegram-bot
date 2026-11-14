@@ -63,4 +63,46 @@ public class TelegramHealthMetricsTest {
         assertTrue(metrics.contains("telegram_updates_received_total"));
         assertTrue(metrics.contains("telegram_updates_duration_seconds"));
     }
+
+    @Test
+    public void metricsRecordErrorsOnFailedDispatch() {
+        given()
+                .contentType(io.restassured.http.ContentType.JSON)
+                .body("""
+                        {
+                            "update_id": 99123,
+                            "message": {
+                                "message_id": 10,
+                                "date": 1600000000,
+                                "chat": { "id": 12345, "type": "private" },
+                                "from": { "id": 12345, "is_bot": false, "first_name": "Test" },
+                                "text": "/fail"
+                            }
+                        }
+                        """)
+                .when()
+                .post("/telegram/webhook")
+                .then()
+                .statusCode(500);
+
+        String metrics = "";
+        for (int attempt = 0; attempt < 20 && !metrics.contains("telegram_updates_errors_total"); attempt++) {
+            metrics = given()
+                    .when().get("/q/metrics")
+                    .then()
+                    .statusCode(200)
+                    .extract().asString();
+            if (metrics.contains("telegram_updates_errors_total")) {
+                break;
+            }
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        assertTrue(metrics.contains("telegram_updates_errors_total"));
+        assertTrue(metrics.contains("RuntimeException"));
+    }
 }

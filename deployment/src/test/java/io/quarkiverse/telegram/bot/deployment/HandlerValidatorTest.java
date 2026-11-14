@@ -13,13 +13,17 @@ import org.jboss.jandex.Index;
 import org.jboss.jandex.Indexer;
 import org.junit.jupiter.api.Test;
 
+import io.quarkiverse.telegram.bot.runtime.api.AfterUpdate;
+import io.quarkiverse.telegram.bot.runtime.api.BeforeUpdate;
 import io.quarkiverse.telegram.bot.runtime.api.OnError;
+import io.quarkiverse.telegram.bot.runtime.api.OnStateMismatch;
 import io.quarkiverse.telegram.bot.runtime.api.TelegramCommand;
 import io.quarkiverse.telegram.bot.runtime.dispatcher.HandlerDescriptor;
 import io.quarkiverse.telegram.bot.runtime.dispatcher.HandlerType;
 import io.quarkiverse.telegram.bot.runtime.model.Chat;
 import io.quarkiverse.telegram.bot.runtime.model.InlineQueryResult;
 import io.quarkiverse.telegram.bot.runtime.model.SendMessage;
+import io.quarkiverse.telegram.bot.runtime.model.Update;
 import io.quarkiverse.telegram.bot.runtime.model.User;
 import io.smallrye.mutiny.Uni;
 
@@ -91,6 +95,37 @@ class HandlerValidatorTest {
         assertEquals(true, error.getMessage().contains("only @OnError handlers"));
     }
 
+    @Test
+    void unannotatedSessionPayloadIsAllowed() {
+        assertDoesNotThrow(() -> HandlerValidator.validateSignatures(index(UnannotatedPayloadHandler.class)));
+    }
+
+    @Test
+    void onStateMismatchWithInvalidParamFails() {
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> HandlerValidator.validateSignatures(index(BadStateMismatchHandler.class)));
+        assertTrue(error.getMessage().contains("unsupported parameter type java.lang.Runnable"));
+    }
+
+    @Test
+    void beforeUpdateReturningStringFails() {
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> HandlerValidator.validateSignatures(index(BadBeforeUpdateReturn.class)));
+        assertTrue(error.getMessage().contains("Supported for @BeforeUpdate"));
+    }
+
+    @Test
+    void afterUpdateReturningSendMessageFails() {
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> HandlerValidator.validateSignatures(index(BadAfterUpdateReturn.class)));
+        assertTrue(error.getMessage().contains("Supported for @AfterUpdate"));
+    }
+
+    @Test
+    void validInterceptorsPass() {
+        assertDoesNotThrow(() -> HandlerValidator.validateSignatures(index(ValidInterceptors.class)));
+    }
+
     private HandlerBuildItem command(String value, String className, List<String> chatTypes) {
         HandlerDescriptor descriptor = new HandlerDescriptor(HandlerType.COMMAND, value, className, "handle",
                 List.of(), false, null, null);
@@ -153,6 +188,63 @@ class HandlerValidatorTest {
         @TelegramCommand("/throwable")
         public String handle(IllegalArgumentException error) {
             return "nope";
+        }
+    }
+
+    record CustomBookingPayload(String date, Integer guests) {
+    }
+
+    static class UnannotatedPayloadHandler {
+        @TelegramCommand("/book")
+        public String handle(CustomBookingPayload payload) {
+            return "booked";
+        }
+    }
+
+    static class BadStateMismatchHandler {
+        @OnStateMismatch("WAITING")
+        public String handle(Runnable runnable) {
+            return "mismatch";
+        }
+    }
+
+    static class BadBeforeUpdateReturn {
+        @BeforeUpdate
+        public String before(Update update) {
+            return "bad";
+        }
+    }
+
+    static class BadAfterUpdateReturn {
+        @AfterUpdate
+        public SendMessage after(Update update) {
+            return null;
+        }
+    }
+
+    static class ValidInterceptors {
+        @BeforeUpdate
+        public boolean beforeBool(Update update) {
+            return true;
+        }
+
+        @BeforeUpdate
+        public Uni<Boolean> beforeUniBool(Update update) {
+            return Uni.createFrom().item(true);
+        }
+
+        @BeforeUpdate
+        public Uni<Void> beforeUniVoid(Update update) {
+            return Uni.createFrom().voidItem();
+        }
+
+        @AfterUpdate
+        public void afterVoid(Update update) {
+        }
+
+        @AfterUpdate
+        public Uni<Void> afterUniVoid(Update update, Throwable err) {
+            return Uni.createFrom().voidItem();
         }
     }
 }
