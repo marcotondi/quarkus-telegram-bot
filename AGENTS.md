@@ -87,5 +87,8 @@
 * **WireMock Harness & Dynamic Port Trap**:
   Integration tests use `TelegramMockServer` (`@QuarkusTestResource(TelegramMockServer.class)`) which stubs Telegram API endpoints (`getMe`, `deleteWebhook`, `sendMessage`, `answerInlineQuery`, etc.) on dynamic ports.
   * *Trap*: **NEVER call static `WireMock.verify(...)`**; it defaults to port `8080` and throws `HttpHostConnectException: Connection refused`. Always call `TelegramMockServer.getWireMockServer().verify(...)` or the test helper `verifyWithRetry(...)`.
-* **Redis Tests**:
-  `RedisSessionStoreTest` uses Mockito mocks on `ReactiveRedisDataSource` rather than live Testcontainers, preventing Docker/Podman socket permission issues. `quarkus.redis.devservices.enabled=false` is set in `integration-tests/src/main/resources/application.properties`.
+* **Redis & DevServices Tests**:
+  * Rootless Podman is supported via `/run/user/1000/podman/podman.sock` in `~/.testcontainers.properties` (`docker.host=unix:///run/user/1000/podman/podman.sock`).
+  * `TelegramRedisDevServicesTest` uses `RedisTestProfile` (`quarkus.redis.devservices.enabled=true`, `quarkus.redis.devservices.image-name=docker.io/library/redis:7-alpine`, `quarkus.telegram.session.store=redis`) to test live Redis container interactions and FSM conversation persistence against real Redis.
+  * Standard tests keep `quarkus.redis.devservices.enabled=false` by default in `integration-tests/src/main/resources/application.properties` to ensure fast offline execution.
+  * `RedisSessionStoreTest` provides fast mock-based unit tests for `ReactiveRedisDataSource`.
