@@ -10,5 +10,10 @@ public record TelegramResponse<T>(
         @JsonProperty("ok") boolean ok,
         @JsonProperty("result") T result,
         @JsonProperty("description") String description,
-        @JsonProperty("error_code") Integer errorCode) {
+        @JsonProperty("error_code") Integer errorCode,
+        @JsonProperty("parameters") ResponseParameters parameters) {
+
+    public TelegramResponse(boolean ok, T result, String description, Integer errorCode) {
+        this(ok, result, description, errorCode, null);
+    }
 }

@@ -1,7 +1,9 @@
 package io.quarkiverse.telegram.bot.it;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -15,6 +17,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.quarkiverse.telegram.bot.runtime.session.RedisSessionStore;
@@ -22,6 +25,7 @@ import io.quarkiverse.telegram.bot.runtime.session.SessionKey;
 import io.quarkiverse.telegram.bot.runtime.session.SessionSnapshot;
 import io.quarkus.redis.datasource.ReactiveRedisDataSource;
 import io.quarkus.redis.datasource.value.ReactiveValueCommands;
+import io.quarkus.redis.datasource.value.SetArgs;
 import io.smallrye.mutiny.Uni;
 
 public class RedisSessionStoreTest {
@@ -87,19 +91,41 @@ public class RedisSessionStoreTest {
     }
 
     @Test
-    public void testAcquireAndReleaseDistributedLock() {
+    public void testAcquireAndReleaseDistributedLockWithToken() {
         SessionKey key = new SessionKey(1001, 2001);
         String lockKey = key.toStorageKey() + ":lock";
+        String token = "custom-token-123";
 
-        when(commands.setnx(eq(lockKey), anyString())).thenReturn(Uni.createFrom().item(true));
-        when(commands.psetex(eq(lockKey), anyLong(), anyString())).thenReturn(Uni.createFrom().voidItem());
+        when(commands.setAndChanged(eq(lockKey), eq(token), any(SetArgs.class))).thenReturn(Uni.createFrom().item(true));
+        when(ds.execute(eq("EVAL"), anyString(), eq("1"), eq(lockKey), eq(token)))
+                .thenReturn(Uni.createFrom().nullItem());
 
-        boolean locked = store.acquireLock(key, Duration.ofSeconds(10)).await().indefinitely();
+        boolean locked = store.acquireLock(key, token, Duration.ofSeconds(10)).await().indefinitely();
         assertTrue(locked);
-        verify(commands).setnx(eq(lockKey), anyString());
+        verify(commands).setAndChanged(eq(lockKey), eq(token), any(SetArgs.class));
 
-        when(commands.getdel(lockKey)).thenReturn(Uni.createFrom().item("token"));
-        store.releaseLock(key).await().indefinitely();
-        verify(commands).getdel(lockKey);
+        store.releaseLock(key, token).await().indefinitely();
+        verify(ds).execute(eq("EVAL"), anyString(), eq("1"), eq(lockKey), eq(token));
+    }
+
+    @Test
+    public void testSaveSerializationFailurePropagates() throws Exception {
+        ObjectMapper failingMapper = mock(ObjectMapper.class);
+        when(failingMapper.writeValueAsString(any())).thenThrow(new JsonProcessingException("Simulated error") {
+        });
+        RedisSessionStore failingStore = new RedisSessionStore(ds, failingMapper);
+
+        SessionKey key = new SessionKey(1001, 2001);
+        SessionSnapshot snapshot = new SessionSnapshot("ACTIVE", "{}", "java.lang.Object");
+
+        assertThrows(Exception.class, () -> failingStore.save(key, snapshot, Duration.ofMinutes(10)).await().indefinitely());
+    }
+
+    @Test
+    public void testLoadDeserializationFailurePropagates() {
+        SessionKey key = new SessionKey(1001, 2001);
+        when(commands.get(key.toStorageKey())).thenReturn(Uni.createFrom().item("invalid-json{"));
+
+        assertThrows(Exception.class, () -> store.load(key).await().indefinitely());
     }
 }

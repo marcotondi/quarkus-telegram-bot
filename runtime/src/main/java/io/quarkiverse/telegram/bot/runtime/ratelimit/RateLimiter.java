@@ -7,6 +7,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * In-memory fixed-window rate limiter keyed by user or chat id.
+ * <p>
+ * Note: this counter is maintained in-process per JVM instance. In multi-pod deployments,
+ * the effective cluster-wide rate limit is N * maxRequests. If strict global limits
+ * across multiple instances are required, configure rate limiting at the ingress or reverse proxy layer.
  */
 public final class RateLimiter {
 

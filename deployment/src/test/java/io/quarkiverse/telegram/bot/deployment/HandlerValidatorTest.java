@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import io.quarkiverse.telegram.bot.runtime.api.AfterUpdate;
 import io.quarkiverse.telegram.bot.runtime.api.BeforeUpdate;
 import io.quarkiverse.telegram.bot.runtime.api.OnError;
+import io.quarkiverse.telegram.bot.runtime.api.OnState;
 import io.quarkiverse.telegram.bot.runtime.api.OnStateMismatch;
 import io.quarkiverse.telegram.bot.runtime.api.TelegramCommand;
 import io.quarkiverse.telegram.bot.runtime.dispatcher.HandlerDescriptor;
@@ -246,5 +247,19 @@ class HandlerValidatorTest {
         public Uni<Void> afterUniVoid(Update update, Throwable err) {
             return Uni.createFrom().voidItem();
         }
+    }
+
+    static class StandaloneOnStateHandler {
+        @OnState("SOME_STATE")
+        public void handle(String text) {
+        }
+    }
+
+    @Test
+    void standaloneOnStateWithoutTriggerFails() {
+        Index index = index(StandaloneOnStateHandler.class);
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> HandlerValidator.validateStateAnnotations(index));
+        assertTrue(error.getMessage().contains("has no effect without a trigger annotation"));
     }
 }

@@ -115,13 +115,37 @@ quarkus.redis.hosts=redis://localhost:6379
 
 Default store is in-memory; sessions expire after `quarkus.telegram.session.ttl` (default `15m`). The Redis store needs the `quarkus-redis-client` extension. In dev and test mode DevServices can start Redis for you; see [Conversations & FSM](docs/modules/ROOT/pages/conversations.adoc).
 
+## How it works
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Telegram as Telegram Server
+    participant WH as WebhookHandler (Vert.x)
+    participant UD as UpdateDispatcher
+    participant GB as GreetingBot (CDI Bean)
+    participant CL as TelegramBotClient
+    participant TG as Telegram Bot API
+
+    Telegram->>WH: POST /telegram/webhook (JSON Update)
+    WH->>Telegram: 200 OK (immediate)
+    WH->>UD: dispatch(Update)
+    UD->>GB: invokes @TelegramCommand /start (user, chat)
+    GB-->>UD: returns SendMessage("Benvenuto...")
+    UD->>CL: sendMessage(SendMessage)
+    CL->>TG: POST /bot{token}/sendMessage
+```
+
 ## Documentation
 
 - Full guide and FSM examples: [docs/modules/ROOT/pages/index.adoc](docs/modules/ROOT/pages/index.adoc)
-- Every configuration key: [docs/modules/ROOT/pages/config-reference.adoc](docs/modules/ROOT/pages/config-reference.adoc)
-- Module-by-module walkthrough: [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)
-- Architecture notes: [architecture.md](architecture.md)
-- Health check, metrics and build-time validation: [docs/modules/ROOT/pages/observability.adoc](docs/modules/ROOT/pages/observability.adoc)
+- Handlers & routing: [docs/modules/ROOT/pages/handlers.adoc](docs/modules/ROOT/pages/handlers.adoc)
+- Conversations & FSM: [docs/modules/ROOT/pages/conversations.adoc](docs/modules/ROOT/pages/conversations.adoc)
+- Security & authorization: [docs/modules/ROOT/pages/security.adoc](docs/modules/ROOT/pages/security.adoc)
+- Transports & configuration: [docs/modules/ROOT/pages/transports.adoc](docs/modules/ROOT/pages/transports.adoc)
+- Testing bots: [docs/modules/ROOT/pages/testing.adoc](docs/modules/ROOT/pages/testing.adoc)
+- Health, metrics & build-time validation: [docs/modules/ROOT/pages/observability.adoc](docs/modules/ROOT/pages/observability.adoc)
+- Configuration reference: [docs/modules/ROOT/pages/config-reference.adoc](docs/modules/ROOT/pages/config-reference.adoc)
 
 ## Building from source
 

@@ -83,4 +83,4 @@ Funzionalità avanzate pianificate per rilasci successivi:
 
 ---
 
-*Ultimo aggiornamento: 14 Novembre 2026 sul branch `fixes-and-hardening`.*
+*Ultimo aggiornamento: 14 Novembre 2026 sul branch `main`.*

@@ -1,12 +1,15 @@
 package io.quarkiverse.telegram.bot.runtime.client;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.WebApplicationException;
 
 import org.eclipse.microprofile.rest.client.inject.RestClient;
+import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.client.api.ClientMultipartForm;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -47,6 +50,8 @@ import io.vertx.core.buffer.Buffer;
 @ApplicationScoped
 public class TelegramBotClient {
 
+    private static final Logger LOG = Logger.getLogger(TelegramBotClient.class);
+
     private final TelegramBotApi api;
     private final TelegramBotConfig config;
     private final ObjectMapper objectMapper;
@@ -66,15 +71,34 @@ public class TelegramBotClient {
     }
 
     private <T> Uni<T> extractResult(Uni<TelegramResponse<T>> uni) {
-        return uni.map(resp -> {
+        return uni.flatMap(resp -> {
             if (resp == null) {
-                throw new TelegramApiException(null, "Null response from Telegram API");
+                return Uni.createFrom().failure(new TelegramApiException(null, "Null response from Telegram API"));
             }
             if (!resp.ok()) {
-                throw new TelegramApiException(resp.errorCode(), resp.description());
+                Integer retryAfter = resp.parameters() != null ? resp.parameters().retryAfter() : null;
+                return Uni.createFrom().failure(new TelegramApiException(resp.errorCode(), resp.description(), retryAfter));
             }
-            return resp.result();
-        });
+            return Uni.createFrom().item(resp.result());
+        }).onFailure(this::isRateLimitError).retry().when(failures -> failures.select().first(3).onItem().call(failure -> {
+            long delaySeconds = 1;
+            if (failure instanceof TelegramApiException ex && ex.getRetryAfter() != null && ex.getRetryAfter() > 0) {
+                delaySeconds = ex.getRetryAfter();
+            }
+            LOG.warnf("Telegram API rate limit (429) hit, retrying in %d seconds...", delaySeconds);
+            return Uni.createFrom().nullItem().onItem().delayIt().by(Duration.ofSeconds(delaySeconds));
+        }));
+    }
+
+    private boolean isRateLimitError(Throwable t) {
+        if (t instanceof TelegramApiException ex && ex.getErrorCode() != null && ex.getErrorCode() == 429) {
+            return true;
+        }
+        if (t instanceof WebApplicationException we && we.getResponse() != null
+                && we.getResponse().getStatus() == 429) {
+            return true;
+        }
+        return false;
     }
 
     private <T> Uni<T> extractMultipartResult(Uni<TelegramResponse<T>> uni) {

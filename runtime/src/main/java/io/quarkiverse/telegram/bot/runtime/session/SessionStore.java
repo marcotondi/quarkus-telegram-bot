@@ -17,7 +17,15 @@ public interface SessionStore {
         return Uni.createFrom().item(true);
     }
 
+    default Uni<Boolean> acquireLock(SessionKey key, String token, Duration timeout) {
+        return acquireLock(key, timeout);
+    }
+
     default Uni<Void> releaseLock(SessionKey key) {
         return Uni.createFrom().voidItem();
+    }
+
+    default Uni<Void> releaseLock(SessionKey key, String token) {
+        return releaseLock(key);
     }
 }

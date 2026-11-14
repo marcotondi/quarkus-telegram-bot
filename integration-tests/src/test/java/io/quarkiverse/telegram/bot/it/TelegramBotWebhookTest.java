@@ -260,7 +260,7 @@ public class TelegramBotWebhookTest {
     public void testOnMessageFilteringPhotoDoesNotMatchText() throws Exception {
         String updateJson = """
                 {
-                    "update_id": 101,
+                    "update_id": 26301,
                     "message": {
                         "message_id": 101,
                         "date": 1700000000,
@@ -304,7 +304,7 @@ public class TelegramBotWebhookTest {
         java.util.List<java.util.concurrent.Future<Integer>> futures = new java.util.ArrayList<>();
 
         for (int i = 1; i <= 3; i++) {
-            final int updateId = 300 + i;
+            final int updateId = 3300 + i;
             futures.add(pool.submit(() -> {
                 String updateJson = String.format("""
                         {
@@ -408,6 +408,40 @@ public class TelegramBotWebhookTest {
         TelegramMockServer.getWireMockServer().verify(0,
                 WireMock.postRequestedFor(WireMock.urlMatching("/bot.*/sendMessage"))
                         .withRequestBody(WireMock.containing("-100999")));
+    }
+
+    @Test
+    public void testWebhookDeduplicatesRecentlyProcessedUpdates() {
+        String updateJson = """
+                {
+                    "update_id": 8888,
+                    "message": {
+                        "message_id": 88,
+                        "date": 1700000000,
+                        "chat": { "id": 1001, "type": "private" },
+                        "from": { "id": 2001, "is_bot": false, "first_name": "DedupUser" },
+                        "text": "/start"
+                    }
+                }
+                """;
+
+        // First call: successfully processed
+        given()
+                .contentType(ContentType.JSON)
+                .body(updateJson)
+                .when()
+                .post("/telegram/webhook")
+                .then()
+                .statusCode(200);
+
+        // Second call with identical update_id: acknowledged with 200 via deduplication cache
+        given()
+                .contentType(ContentType.JSON)
+                .body(updateJson)
+                .when()
+                .post("/telegram/webhook")
+                .then()
+                .statusCode(200);
     }
 
     private void verifyWithRetry(com.github.tomakehurst.wiremock.matching.RequestPatternBuilder pattern)

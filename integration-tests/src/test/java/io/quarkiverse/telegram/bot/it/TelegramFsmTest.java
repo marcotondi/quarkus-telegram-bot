@@ -2,6 +2,7 @@ package io.quarkiverse.telegram.bot.it;
 
 import static io.restassured.RestAssured.given;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.github.tomakehurst.wiremock.client.WireMock;
@@ -13,6 +14,11 @@ import io.restassured.http.ContentType;
 @QuarkusTest
 @QuarkusTestResource(TelegramMockServer.class)
 public class TelegramFsmTest {
+
+    @BeforeEach
+    public void resetWireMock() {
+        TelegramMockServer.getWireMockServer().resetRequests();
+    }
 
     @Test
     public void testFullBookingConversationFlow() throws Exception {
@@ -160,6 +166,66 @@ public class TelegramFsmTest {
                 """;
 
         given().contentType(ContentType.JSON).body(cancelAgainJson)
+                .when().post("/telegram/webhook")
+                .then().statusCode(200);
+
+        verifyMessageSent("Nessuna operazione in corso da annullare.");
+    }
+
+    @Test
+    public void testInterruptsStateClearsStateAutomatically() throws Exception {
+        // Step 1: Start booking (enters WAITING_DATE)
+        String startJson = """
+                {
+                    "update_id": 251,
+                    "message": {
+                        "message_id": 21,
+                        "date": 1700000000,
+                        "chat": { "id": 5005, "type": "private" },
+                        "from": { "id": 9005, "is_bot": false, "first_name": "Charlie" },
+                        "text": "/prenota"
+                    }
+                }
+                """;
+        given().contentType(ContentType.JSON).body(startJson)
+                .when().post("/telegram/webhook")
+                .then().statusCode(200);
+
+        verifyMessageSent("Per quale data vuoi prenotare?");
+
+        // Step 2: Send /reset (interruptsState = true, does NOT call ctx.complete() manually)
+        String resetJson = """
+                {
+                    "update_id": 252,
+                    "message": {
+                        "message_id": 22,
+                        "date": 1700000001,
+                        "chat": { "id": 5005, "type": "private" },
+                        "from": { "id": 9005, "is_bot": false, "first_name": "Charlie" },
+                        "text": "/reset"
+                    }
+                }
+                """;
+        given().contentType(ContentType.JSON).body(resetJson)
+                .when().post("/telegram/webhook")
+                .then().statusCode(200);
+
+        verifyMessageSent("Reset eseguito.");
+
+        // Step 3: Send /annulla - since state was cleared by /reset, it should report no active operation!
+        String checkJson = """
+                {
+                    "update_id": 253,
+                    "message": {
+                        "message_id": 23,
+                        "date": 1700000002,
+                        "chat": { "id": 5005, "type": "private" },
+                        "from": { "id": 9005, "is_bot": false, "first_name": "Charlie" },
+                        "text": "/annulla"
+                    }
+                }
+                """;
+        given().contentType(ContentType.JSON).body(checkJson)
                 .when().post("/telegram/webhook")
                 .then().statusCode(200);
 

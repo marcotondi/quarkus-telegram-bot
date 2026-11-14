@@ -140,6 +140,7 @@ public interface TelegramBotConfig {
     interface RateLimitConfig {
         /**
          * Whether incoming updates are throttled before dispatch.
+         * Note: Rate limiting is currently tracked in-process per JVM instance.
          */
         @WithDefault("false")
         boolean enabled();

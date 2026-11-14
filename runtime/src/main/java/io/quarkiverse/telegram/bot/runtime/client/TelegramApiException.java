@@ -4,11 +4,17 @@ public class TelegramApiException extends RuntimeException {
 
     private final Integer errorCode;
     private final String description;
+    private final Integer retryAfter;
 
     public TelegramApiException(Integer errorCode, String description) {
+        this(errorCode, description, null);
+    }
+
+    public TelegramApiException(Integer errorCode, String description, Integer retryAfter) {
         super(formatMessage(errorCode, description));
         this.errorCode = errorCode;
         this.description = description;
+        this.retryAfter = retryAfter;
     }
 
     public Integer getErrorCode() {
@@ -17,6 +23,10 @@ public class TelegramApiException extends RuntimeException {
 
     public String getDescription() {
         return description;
+    }
+
+    public Integer getRetryAfter() {
+        return retryAfter;
     }
 
     private static String formatMessage(Integer errorCode, String description) {

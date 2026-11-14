@@ -44,6 +44,7 @@ final class HandlerValidator {
     private static final DotName BEFORE_UPDATE = DotName.createSimple(BeforeUpdate.class.getName());
     private static final DotName AFTER_UPDATE = DotName.createSimple(AfterUpdate.class.getName());
     private static final DotName ON_STATE_MISMATCH = DotName.createSimple(OnStateMismatch.class.getName());
+    private static final DotName ON_STATE = DotName.createSimple("io.quarkiverse.telegram.bot.runtime.api.OnState");
     private static final DotName SESSION_PAYLOAD = DotName.createSimple(SessionPayload.class.getName());
 
     private static final List<DotName> HANDLER_ANNOTATIONS = List.of(
@@ -97,6 +98,22 @@ final class HandlerValidator {
                 String key = method.declaringClass().name() + "#" + method.name() + method.parameterTypes();
                 if (validated.add(key)) {
                     validateMethod(method, index, payloads);
+                }
+            }
+        }
+    }
+
+    static void validateStateAnnotations(IndexView index) {
+        for (AnnotationInstance instance : index.getAnnotations(ON_STATE)) {
+            if (instance.target().kind() == org.jboss.jandex.AnnotationTarget.Kind.METHOD) {
+                MethodInfo method = instance.target().asMethod();
+                boolean hasTrigger = method.hasAnnotation(ON_MESSAGE)
+                        || method.hasAnnotation(ON_CALLBACK_QUERY)
+                        || method.hasAnnotation(TELEGRAM_COMMAND)
+                        || method.hasAnnotation(ON_STATE_MISMATCH);
+                if (!hasTrigger) {
+                    throw new IllegalStateException("@OnState on " + method.declaringClass().name() + "#" + method.name()
+                            + " has no effect without a trigger annotation (@OnMessage, @OnCallbackQuery, @TelegramCommand, or @OnStateMismatch)");
                 }
             }
         }

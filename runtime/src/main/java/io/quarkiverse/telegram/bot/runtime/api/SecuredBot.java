@@ -23,7 +23,11 @@ public @interface SecuredBot {
     String[] roles() default {};
 
     /**
-     * Allowed user IDs (e.g. "12345678") or usernames (e.g. "john" or "@john").
+     * Allowed numeric user IDs (e.g. "12345678").
+     * <p>
+     * Note: while usernames (e.g. "john" or "@john") are supported for backward compatibility,
+     * numeric user IDs are strongly recommended because Telegram usernames are mutable and can be
+     * transferred or claimed by other users.
      * If empty, user ID checking is skipped.
      */
     String[] allowedUsers() default {};

@@ -148,6 +148,7 @@ class TelegramBotProcessor {
     @Produce(ArtifactResultBuildItem.class)
     void validateHandlers(CombinedIndexBuildItem index, List<HandlerBuildItem> handlers) {
         HandlerValidator.validateSignatures(index.getIndex());
+        HandlerValidator.validateStateAnnotations(index.getIndex());
         HandlerValidator.validateNoDuplicateCommands(handlers);
     }
 

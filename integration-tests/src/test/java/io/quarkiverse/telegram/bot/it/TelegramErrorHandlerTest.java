@@ -2,6 +2,7 @@ package io.quarkiverse.telegram.bot.it;
 
 import static io.restassured.RestAssured.given;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.github.tomakehurst.wiremock.client.WireMock;
@@ -14,11 +15,16 @@ import io.restassured.http.ContentType;
 @QuarkusTestResource(TelegramMockServer.class)
 public class TelegramErrorHandlerTest {
 
+    @BeforeEach
+    public void resetWireMock() {
+        TelegramMockServer.getWireMockServer().resetRequests();
+    }
+
     @Test
     public void testCourtesyMessageSentOnCustomValidationException() throws Exception {
         String updateJson = """
                 {
-                    "update_id": 901,
+                    "update_id": 9101,
                     "message": {
                         "message_id": 1,
                         "date": 1700000000,
@@ -53,7 +59,7 @@ public class TelegramErrorHandlerTest {
     public void testScopedOnErrorTakesPrecedenceOverGlobal() throws Exception {
         String updateJson = """
                 {
-                    "update_id": 902,
+                    "update_id": 9102,
                     "message": {
                         "message_id": 2,
                         "date": 1700000000,
@@ -93,7 +99,7 @@ public class TelegramErrorHandlerTest {
     public void testTelegramExceptionHandlerInterface() throws Exception {
         String updateJson = """
                 {
-                    "update_id": 903,
+                    "update_id": 9103,
                     "message": {
                         "message_id": 3,
                         "date": 1700000000,
@@ -128,7 +134,7 @@ public class TelegramErrorHandlerTest {
     public void testAsyncUniFailureHandledByOnError() throws Exception {
         String updateJson = """
                 {
-                    "update_id": 904,
+                    "update_id": 9104,
                     "message": {
                         "message_id": 4,
                         "date": 1700000000,
@@ -164,7 +170,7 @@ public class TelegramErrorHandlerTest {
     public void testUnhandledExceptionReturns500() {
         String updateJson = """
                 {
-                    "update_id": 905,
+                    "update_id": 9105,
                     "message": {
                         "message_id": 5,
                         "date": 1700000000,

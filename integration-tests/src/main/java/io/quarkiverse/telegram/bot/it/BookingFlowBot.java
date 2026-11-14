@@ -65,4 +65,9 @@ public class BookingFlowBot {
         ctx.complete();
         return "Operazione annullata.";
     }
+
+    @TelegramCommand(value = "/reset", interruptsState = true)
+    public String resetWithoutExplicitComplete() {
+        return "Reset eseguito.";
+    }
 }

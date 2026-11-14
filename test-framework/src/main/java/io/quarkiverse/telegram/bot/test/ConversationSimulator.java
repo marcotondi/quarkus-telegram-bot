@@ -53,7 +53,7 @@ public class ConversationSimulator {
     private String customSecretToken;
     private final Map<String, String> headers = new HashMap<>();
 
-    private final AtomicLong updateIdCounter = new AtomicLong(100);
+    private static final AtomicLong updateIdCounter = new AtomicLong(1_000_000_000L);
     private final AtomicLong messageIdCounter = new AtomicLong(1);
     private final AtomicLong lastBotMessageId = new AtomicLong(999);
 

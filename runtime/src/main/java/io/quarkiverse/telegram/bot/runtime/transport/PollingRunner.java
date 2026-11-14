@@ -121,7 +121,7 @@ public class PollingRunner {
                         });
     }
 
-    private Uni<Void> processUpdatesSequentially(List<Update> updates) {
+    Uni<Void> processUpdatesSequentially(List<Update> updates) {
         Uni<Void> chain = Uni.createFrom().voidItem();
         for (Update update : updates) {
             chain = chain.chain(() -> {
@@ -135,7 +135,10 @@ public class PollingRunner {
                     return Uni.createFrom().voidItem();
                 }
                 return dispatcher.dispatch(update)
-                        .onItem().invoke(() -> {
+                        .onFailure().invoke(error -> LOG.errorf(error, "Error dispatching update %d in polling loop: %s",
+                                update.updateId(), error.getMessage()))
+                        .onFailure().recoverWithNull()
+                        .onTermination().invoke((ignored, failure, cancelled) -> {
                             if (update.updateId() > lastUpdateId.get()) {
                                 lastUpdateId.set(update.updateId());
                             }
@@ -143,6 +146,10 @@ public class PollingRunner {
             });
         }
         return chain;
+    }
+
+    public long getLastUpdateId() {
+        return lastUpdateId.get();
     }
 
     public boolean isRunning() {

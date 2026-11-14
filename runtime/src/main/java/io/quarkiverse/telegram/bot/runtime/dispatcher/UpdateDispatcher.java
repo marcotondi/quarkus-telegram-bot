@@ -8,7 +8,9 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
@@ -209,21 +211,30 @@ public class UpdateDispatcher {
     private Uni<Void> doDispatch(Update update, SessionKey sessionKey) {
         AtomicReference<String> failingBeanClass = new AtomicReference<>();
         setupMdc(update);
-        return sessionStore.acquireLock(sessionKey, Duration.ofSeconds(15))
-                .flatMap(locked -> sessionStore.load(sessionKey)
-                        .flatMap(snapshotOpt -> {
-                            ConversationContextImpl ctx = new ConversationContextImpl(
-                                    sessionKey,
-                                    snapshotOpt.orElse(null),
-                                    sessionStore,
-                                    client.objectMapper(),
-                                    config.session().ttl());
-                            return dispatchWithInterceptors(update, sessionKey, ctx, failingBeanClass);
-                        }))
-                .onTermination().call(() -> {
-                    clearMdc();
-                    return sessionStore.releaseLock(sessionKey);
-                });
+        String lockToken = UUID.randomUUID().toString();
+        return sessionStore.acquireLock(sessionKey, lockToken, Duration.ofSeconds(15))
+                .flatMap(locked -> {
+                    if (!Boolean.TRUE.equals(locked)) {
+                        LOG.warnf("Failed to acquire distributed lock for session %s, discarding concurrent update %s",
+                                sessionKey, update != null ? update.updateId() : "unknown");
+                        return Uni.createFrom().voidItem();
+                    }
+                    return sessionStore.load(sessionKey)
+                            .flatMap(snapshotOpt -> {
+                                ConversationContextImpl ctx = new ConversationContextImpl(
+                                        sessionKey,
+                                        snapshotOpt.orElse(null),
+                                        sessionStore,
+                                        client.objectMapper(),
+                                        config.session().ttl());
+                                return dispatchWithInterceptors(update, sessionKey, ctx, failingBeanClass);
+                            })
+                            .onTermination().call(() -> {
+                                clearMdc();
+                                return sessionStore.releaseLock(sessionKey, lockToken);
+                            });
+                })
+                .onFailure().invoke(this::clearMdc);
     }
 
     private Uni<Void> dispatchWithInterceptors(
@@ -424,7 +435,7 @@ public class UpdateDispatcher {
             return ctx.getSessionStore().save(ctx.getSessionKey(), snapshot, ctx.getTtl());
         } catch (Exception e) {
             LOG.errorf(e, "Failed to serialize session snapshot for %s", ctx.getSessionKey());
-            return Uni.createFrom().voidItem();
+            return Uni.createFrom().failure(e);
         }
     }
 
@@ -464,14 +475,21 @@ public class UpdateDispatcher {
         CallbackQuery callbackQuery = update.callbackQuery();
         String currentState = ctx != null ? ctx.currentState().orElse(null) : null;
 
-        // 1. Commands with interruptsState = true have absolute precedence
+        // 1. Commands with interruptsState = true have absolute precedence and clear active conversation state
         if (message != null && message.text() != null && message.text().startsWith("/")) {
             String rawCommand = extractCommand(message.text());
             for (HandlerDescriptor h : handlers) {
                 if (h.getType() == HandlerType.COMMAND && h.isInterruptsState()
                         && matchesChatType(h, update)
                         && matchesCommand(h.getMatchValue(), rawCommand)) {
-                    return invokeHandler(h, update, ctx, null, failingBeanClass);
+                    String previousState = ctx != null ? ctx.currentState().orElse(null) : null;
+                    return invokeHandler(h, update, ctx, null, failingBeanClass)
+                            .invoke(() -> {
+                                if (ctx != null && previousState != null
+                                        && previousState.equals(ctx.currentState().orElse(null))) {
+                                    ctx.complete();
+                                }
+                            });
                 }
             }
         }
@@ -613,9 +631,13 @@ public class UpdateDispatcher {
                     return true;
                 }
                 if (username != null && allowed.equalsIgnoreCase(username)) {
+                    LOG.warnf("[Telegram Security] User %d matched @SecuredBot allowedUsers via mutable username '%s'. "
+                            + "Prefer using immutable numeric user IDs for security.", user.id(), username);
                     return true;
                 }
                 if (usernameWithAt != null && allowed.equalsIgnoreCase(usernameWithAt)) {
+                    LOG.warnf("[Telegram Security] User %d matched @SecuredBot allowedUsers via mutable username '%s'. "
+                            + "Prefer using immutable numeric user IDs for security.", user.id(), usernameWithAt);
                     return true;
                 }
             }
@@ -793,10 +815,6 @@ public class UpdateDispatcher {
             Uni<Void> sendUni = client.sendMessage(sendMessage).replaceWithVoid();
             return dismissCallbackQueryAndPropagate(sendUni, update);
         }
-        if (result instanceof EditMessageText editMessageText) {
-            Uni<Void> editUni = client.editMessageText(editMessageText).replaceWithVoid();
-            return dismissCallbackQueryAndPropagate(editUni, update);
-        }
         if (result instanceof EditMessageReplyMarkup editReplyMarkup) {
             Uni<Void> editUni = client.editMessageReplyMarkup(editReplyMarkup).replaceWithVoid();
             return dismissCallbackQueryAndPropagate(editUni, update);
@@ -813,6 +831,8 @@ public class UpdateDispatcher {
             Uni<Void> sendUni = client.sendMessage(chatId, text).replaceWithVoid();
             return dismissCallbackQueryAndPropagate(sendUni, update);
         }
+        LOG.warnf("Unhandled handler result of type %s for update %s",
+                result.getClass().getName(), update != null ? update.updateId() : "null");
         if (update != null && update.callbackQuery() != null) {
             return client.answerCallbackQuery(update.callbackQuery().id()).replaceWithVoid();
         }
@@ -926,10 +946,9 @@ public class UpdateDispatcher {
                 } else {
                     args[i] = callbackParam;
                 }
-            } else if (ctx != null && ctx.data(pt).isPresent()) {
-                args[i] = ctx.data(pt).get();
             } else {
-                args[i] = null;
+                Optional<?> payloadData = ctx != null ? ctx.data(pt) : Optional.empty();
+                args[i] = payloadData.orElse(null);
             }
         }
         return args;
@@ -1126,12 +1145,15 @@ public class UpdateDispatcher {
         if (atIndex > 0) {
             String command = firstWord.substring(0, atIndex);
             String targetBot = firstWord.substring(atIndex + 1);
-            if (config.botUsername().isPresent()) {
-                String myUsername = config.botUsername().get();
-                if (!targetBot.equalsIgnoreCase(myUsername)) {
-                    // Command is addressed to another bot, do not match
-                    return null;
-                }
+            if (config.botUsername().isEmpty()) {
+                LOG.warnf("Command '%s' addressed to @%s was ignored because 'quarkus.telegram.bot-username' is not configured",
+                        firstWord, targetBot);
+                return null;
+            }
+            String myUsername = config.botUsername().get();
+            if (!targetBot.equalsIgnoreCase(myUsername)) {
+                // Command is addressed to another bot, do not match
+                return null;
             }
             return command;
         }

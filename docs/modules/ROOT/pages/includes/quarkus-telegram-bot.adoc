@@ -372,7 +372,7 @@ endif::add-copy-button-to-config-props[]
 
 [.description]
 --
-Whether incoming updates are throttled before dispatch.
+Whether incoming updates are throttled before dispatch. Note: Rate limiting is currently tracked in-process per JVM instance.
 
 
 ifdef::add-copy-button-to-env-var[]

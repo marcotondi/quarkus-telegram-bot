@@ -1,5 +1,9 @@
 package io.quarkiverse.telegram.bot.runtime.transport;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 import org.jboss.logging.Logger;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,10 +18,18 @@ public class WebhookHandler implements Handler<RoutingContext> {
 
     private static final Logger LOG = Logger.getLogger(WebhookHandler.class);
     private static final String SECRET_TOKEN_HEADER = "X-Telegram-Bot-Api-Secret-Token";
+    private static final int MAX_PROCESSED_CACHE_SIZE = 10_000;
 
     private final UpdateDispatcher dispatcher;
     private final TelegramBotConfig config;
     private final ObjectMapper objectMapper;
+    private final Map<Long, Boolean> processedUpdates = Collections.synchronizedMap(
+            new LinkedHashMap<Long, Boolean>(1024, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<Long, Boolean> eldest) {
+                    return size() > MAX_PROCESSED_CACHE_SIZE;
+                }
+            });
 
     public WebhookHandler(UpdateDispatcher dispatcher, TelegramBotConfig config, ObjectMapper objectMapper) {
         this.dispatcher = dispatcher;
@@ -50,10 +62,18 @@ public class WebhookHandler implements Handler<RoutingContext> {
 
         try {
             Update update = objectMapper.readValue(body, Update.class);
+            long updateId = update.updateId();
+            if (processedUpdates.containsKey(updateId)) {
+                LOG.debugf("Update %d was already successfully processed; returning 200 to acknowledge retry.", updateId);
+                ctx.response().setStatusCode(200).end();
+                return;
+            }
+
             if (dispatcher != null) {
                 dispatcher.dispatch(update)
                         .subscribe().with(
                                 v -> {
+                                    processedUpdates.put(updateId, Boolean.TRUE);
                                     if (!ctx.response().ended()) {
                                         ctx.response().setStatusCode(200).end();
                                     }
