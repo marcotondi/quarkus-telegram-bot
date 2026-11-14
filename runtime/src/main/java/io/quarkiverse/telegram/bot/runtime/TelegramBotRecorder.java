@@ -6,6 +6,7 @@ import org.jboss.logging.Logger;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.quarkiverse.telegram.bot.runtime.api.TelegramRoleResolver;
 import io.quarkiverse.telegram.bot.runtime.client.TelegramBotClient;
 import io.quarkiverse.telegram.bot.runtime.config.TelegramBotConfig;
 import io.quarkiverse.telegram.bot.runtime.dispatcher.HandlerDescriptor;
@@ -16,6 +17,7 @@ import io.quarkiverse.telegram.bot.runtime.session.SessionStore;
 import io.quarkiverse.telegram.bot.runtime.transport.PollingRunner;
 import io.quarkiverse.telegram.bot.runtime.transport.WebhookHandler;
 import io.quarkus.arc.Arc;
+import io.quarkus.arc.InstanceHandle;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.annotations.Recorder;
@@ -31,8 +33,10 @@ public class TelegramBotRecorder {
         TelegramBotClient client = Arc.container().instance(TelegramBotClient.class).get();
         TelegramBotConfig config = Arc.container().instance(TelegramBotConfig.class).get();
         SessionStore sessionStore = Arc.container().instance(SessionStore.class).get();
+        InstanceHandle<TelegramRoleResolver> roleResolverHandle = Arc.container().instance(TelegramRoleResolver.class);
+        TelegramRoleResolver roleResolver = roleResolverHandle.isAvailable() ? roleResolverHandle.get() : null;
 
-        UpdateDispatcher dispatcher = new UpdateDispatcher(handlers, client, config, sessionStore);
+        UpdateDispatcher dispatcher = new UpdateDispatcher(handlers, client, config, sessionStore, roleResolver);
         return new RuntimeValue<>(dispatcher);
     }
 

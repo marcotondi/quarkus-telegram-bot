@@ -13,14 +13,21 @@ import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 import org.jboss.resteasy.reactive.client.api.ClientMultipartForm;
 
 import io.quarkiverse.telegram.bot.runtime.model.AnswerCallbackQuery;
+import io.quarkiverse.telegram.bot.runtime.model.DeleteMessage;
+import io.quarkiverse.telegram.bot.runtime.model.EditMessageReplyMarkup;
+import io.quarkiverse.telegram.bot.runtime.model.EditMessageResult;
 import io.quarkiverse.telegram.bot.runtime.model.EditMessageText;
 import io.quarkiverse.telegram.bot.runtime.model.GetUpdatesRequest;
 import io.quarkiverse.telegram.bot.runtime.model.Message;
+import io.quarkiverse.telegram.bot.runtime.model.SendAnimationJsonRequest;
 import io.quarkiverse.telegram.bot.runtime.model.SendAudioJsonRequest;
+import io.quarkiverse.telegram.bot.runtime.model.SendChatAction;
 import io.quarkiverse.telegram.bot.runtime.model.SendDocumentJsonRequest;
 import io.quarkiverse.telegram.bot.runtime.model.SendMediaGroupJsonRequest;
 import io.quarkiverse.telegram.bot.runtime.model.SendMessage;
 import io.quarkiverse.telegram.bot.runtime.model.SendPhotoJsonRequest;
+import io.quarkiverse.telegram.bot.runtime.model.SendVideoJsonRequest;
+import io.quarkiverse.telegram.bot.runtime.model.SendVoiceJsonRequest;
 import io.quarkiverse.telegram.bot.runtime.model.SetMyCommandsRequest;
 import io.quarkiverse.telegram.bot.runtime.model.SetWebhookRequest;
 import io.quarkiverse.telegram.bot.runtime.model.TelegramResponse;
@@ -69,6 +76,27 @@ public interface TelegramBotApi {
     @Produces(MediaType.APPLICATION_JSON)
     Uni<TelegramResponse<io.quarkiverse.telegram.bot.runtime.model.EditMessageResult>> editMessageText(
             @PathParam("token") String token, EditMessageText req);
+
+    @POST
+    @Path("/editMessageReplyMarkup")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<EditMessageResult>> editMessageReplyMarkup(
+            @PathParam("token") String token, EditMessageReplyMarkup req);
+
+    @POST
+    @Path("/deleteMessage")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<Boolean>> deleteMessage(
+            @PathParam("token") String token, DeleteMessage req);
+
+    @POST
+    @Path("/sendChatAction")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<Boolean>> sendChatAction(
+            @PathParam("token") String token, SendChatAction req);
 
     @POST
     @Path("/answerCallbackQuery")
@@ -155,6 +183,57 @@ public interface TelegramBotApi {
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
     Uni<TelegramResponse<List<Message>>> sendMediaGroupMultipart(
+            @PathParam("token") String token,
+            ClientMultipartForm form);
+
+    // sendVideo: JSON vs Multipart
+    @POST
+    @Path("/sendVideo")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<Message>> sendVideoJson(
+            @PathParam("token") String token,
+            SendVideoJsonRequest req);
+
+    @POST
+    @Path("/sendVideo")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<Message>> sendVideoMultipart(
+            @PathParam("token") String token,
+            ClientMultipartForm form);
+
+    // sendAnimation: JSON vs Multipart
+    @POST
+    @Path("/sendAnimation")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<Message>> sendAnimationJson(
+            @PathParam("token") String token,
+            SendAnimationJsonRequest req);
+
+    @POST
+    @Path("/sendAnimation")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<Message>> sendAnimationMultipart(
+            @PathParam("token") String token,
+            ClientMultipartForm form);
+
+    // sendVoice: JSON vs Multipart
+    @POST
+    @Path("/sendVoice")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<Message>> sendVoiceJson(
+            @PathParam("token") String token,
+            SendVoiceJsonRequest req);
+
+    @POST
+    @Path("/sendVoice")
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<Message>> sendVoiceMultipart(
             @PathParam("token") String token,
             ClientMultipartForm form);
 }

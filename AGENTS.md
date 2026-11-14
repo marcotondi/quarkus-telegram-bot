@@ -42,12 +42,13 @@
   2. `codegen` (`TelegramModelGenerator` JavaPoet generator)
   3. `runtime` (core extension runtime, models, transport, dispatcher, session)
   4. `deployment` (Quarkus build steps & bytecode augmentor)
-  5. `docs` (AsciiDoc documentation generator, enabled by default profile)
-  6. `integration-tests` (WireMock & mock-based test suite, enabled by default profile)
+  5. `test-framework` (developer testing harness & ConversationSimulator)
+  6. `docs` (AsciiDoc documentation generator, enabled by default profile)
+  7. `integration-tests` (WireMock & mock-based test suite, enabled by default profile)
 
 * **Cross-Module Dependency Trap**:
-  `integration-tests` depends on both `runtime` and `deployment`. If you modify `runtime` or `deployment`, running `mvn test -pl integration-tests` directly will use stale jars from `~/.m2` or fail with `ClassNotFoundException: HandlerBuildItem`.
-  **Fix**: Always run `mvn install -DskipTests -pl runtime,deployment` before running a targeted test in `integration-tests`.
+  `integration-tests` depends on `runtime`, `deployment`, and `test-framework`. If you modify any of these upstream modules, running `mvn test -pl integration-tests` directly will use stale jars from `~/.m2` or fail with `ClassNotFoundException: HandlerBuildItem`.
+  **Fix**: Always run `mvn install -DskipTests -pl runtime,deployment,test-framework` before running a targeted test in `integration-tests`.
 
 * **Model Codegen**:
   The 232 Telegram Bot API 8.x models (records & sealed interfaces) in `runtime/target/generated-sources/telegram` are generated during `runtime` compilation using `exec:java` invoking `TelegramModelGenerator`. If modifying OpenAPI schemas or codegen logic, re-install `codegen` first (`mvn install -pl codegen -DskipTests`).
@@ -63,6 +64,9 @@
   Telegram bot handlers (`@TelegramCommand`, `@OnCallbackQuery`, `@OnMessage`, `@OnStateMismatch`, `@OnInlineQuery`, `@OnChosenInlineResult`, `@OnError`, and beans implementing `TelegramExceptionHandler`) are invoked dynamically by `UpdateDispatcher` and not injected into other beans. ArC will aggressively eliminate them as unused unless protected.
   * *Quirk*: `UnremovableBeanBuildItem.beanClassNames(String...)` passes string sets to `BeanTypesExclusion` which checks against `Set<DotName>`, failing due to Java type erasure.
   * *Pattern*: Use `UnremovableBeanBuildItem(beanInfo -> botClasses.contains(beanInfo.getBeanClass().toString()))` in `TelegramBotProcessor`.
+
+* **Jandex ClassInfo vs Declared Annotations**:
+  In Jandex, `ClassInfo.annotation(DotName)` recursively matches annotations found anywhere on the class members (methods, parameters, fields). When checking for class-level annotations (e.g. `@BotAdmin`, `@SecuredBot`, `@ChatType`), always call `ClassInfo.declaredAnnotation(DotName)` to avoid falsely inheriting annotations placed on methods.
 
 * **Dynamic Classloading in Conversation Context**:
   When deserializing session payloads in `ConversationContextImpl`, do not use 1-arg `Class.forName()`. Use `Thread.currentThread().getContextClassLoader().loadClass()` so application-level record payloads are visible from the extension runtime jar.

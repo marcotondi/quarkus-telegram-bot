@@ -18,6 +18,7 @@
         <module>codegen</module>
         <module>runtime</module>
         <module>deployment</module>
+        <module>test-framework</module>
     </modules>
 
     <scm>
@@ -42,6 +43,16 @@
                 <version>${quarkus.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.quarkiverse.telegram</groupId>
+                <artifactId>quarkus-telegram-bot-test-framework</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.wiremock</groupId>
+                <artifactId>wiremock</artifactId>
+                <version>3.12.1</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

@@ -18,17 +18,17 @@ Questo documento raccoglie la roadmap delle funzionalità pianificate e i miglio
 ### 1. Metodi Telegram Client ad Alta Frequenza
 Completare la copertura dell'API REST in `TelegramBotApi` e `TelegramBotClient` per le operazioni più comuni nell'interazione utente:
 
-- [ ] **`deleteMessage(long chatId, long messageId)`**:
+- [x] **`deleteMessage(long chatId, long messageId)`**:
   - Eliminazione di messaggi di stato temporanei (es. "Elaborazione in corso...").
   - Cancellazione di messaggi con dati sensibili inseriti dall'utente (password, codici OTP).
   - Pulizia dei messaggi di input superflui per mantenere pulita la chat.
-- [ ] **`editMessageReplyMarkup(long chatId, long messageId, ReplyMarkup replyMarkup)`**:
+- [x] **`editMessageReplyMarkup(long chatId, long messageId, ReplyMarkup replyMarkup)`**:
   - Aggiornamento dinamico o rimozione dei bottoni inline senza dover ri-inviare o alterare il testo del messaggio.
-- [ ] **`sendChatAction(long chatId, String action)`**:
+- [x] **`sendChatAction(long chatId, String action)`**:
   - Invio dello stato di presenza (`typing`, `upload_photo`, `record_voice`, `upload_document`, `find_location`).
   - Indispensabile per bot con backend lenti, LLM o chiamate a servizi terzi, evitando l'impressione che il bot sia bloccato.
-- [ ] **Estensione Supporto Media**:
-  - `sendVideo`, `sendAnimation` (supporto nativo per GIF), `sendVoice`.
+- [x] **Estensione Supporto Media**:
+  - `sendVideo`, `sendAnimation` (supporto nativo per GIF), `sendVoice` (con supporto `InputFile` multipart e streaming).
 
 ---
 
@@ -47,15 +47,15 @@ Introdurre un meccanismo dichiarativo ed ergonomico per catturare errori imprevi
 ### 3. Sicurezza, Autorizzazione & Interceptors
 Aggiungere controlli di accesso granulari e componibili:
 
-- [ ] **Filtro di Autorizzazione Ruoli/Admin**:
+- [x] **Filtro di Autorizzazione Ruoli/Admin**:
   - Annotazione `@BotAdmin` o `@SecuredBot(roles = {"admin"}, allowedUsers = {"12345678"})`.
   - Configurazione da `application.properties`:
     ```properties
     quarkus.telegram.security.admin-ids=123456789,987654321
     ```
-- [ ] **Filtro Gruppi e Canali**:
+- [x] **Filtro Gruppi e Canali**:
   - Possibilità di limitare gli handler solo a chat private, canali o supergruppi (`@ChatType({PRIVATE, GROUP})`).
-- [ ] **Interceptors Lifecycle**:
+- [x] **Interceptors Lifecycle**:
   - `@BeforeUpdate` / `@AfterUpdate` per logging, metriche Prometheus personalizzate o audit trail.
 
 ---
@@ -90,7 +90,7 @@ Supporto per casi d'uso avanzati:
 ### 6. Testing Harness & DX Avanzata
 Semplificare i test per gli sviluppatori di bot:
 
-- [ ] **Modulo `test-framework`**:
+- [x] **Modulo `test-framework`**:
   - Fornire un `TelegramBotTestSupport` con mock preconfigurati e un fluent `ConversationSimulator`:
     ```java
     botTester.user(12345L)

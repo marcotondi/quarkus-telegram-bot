@@ -16,6 +16,9 @@ import io.quarkiverse.telegram.bot.runtime.config.TelegramBotConfig;
 import io.quarkiverse.telegram.bot.runtime.model.AnswerCallbackQuery;
 import io.quarkiverse.telegram.bot.runtime.model.AnswerInlineQuery;
 import io.quarkiverse.telegram.bot.runtime.model.BotCommand;
+import io.quarkiverse.telegram.bot.runtime.model.ChatAction;
+import io.quarkiverse.telegram.bot.runtime.model.DeleteMessage;
+import io.quarkiverse.telegram.bot.runtime.model.EditMessageReplyMarkup;
 import io.quarkiverse.telegram.bot.runtime.model.EditMessageResult;
 import io.quarkiverse.telegram.bot.runtime.model.EditMessageText;
 import io.quarkiverse.telegram.bot.runtime.model.GetUpdatesRequest;
@@ -24,11 +27,15 @@ import io.quarkiverse.telegram.bot.runtime.model.InputFile;
 import io.quarkiverse.telegram.bot.runtime.model.InputMedia;
 import io.quarkiverse.telegram.bot.runtime.model.Message;
 import io.quarkiverse.telegram.bot.runtime.model.ReplyMarkup;
+import io.quarkiverse.telegram.bot.runtime.model.SendAnimationJsonRequest;
 import io.quarkiverse.telegram.bot.runtime.model.SendAudioJsonRequest;
+import io.quarkiverse.telegram.bot.runtime.model.SendChatAction;
 import io.quarkiverse.telegram.bot.runtime.model.SendDocumentJsonRequest;
 import io.quarkiverse.telegram.bot.runtime.model.SendMediaGroupJsonRequest;
 import io.quarkiverse.telegram.bot.runtime.model.SendMessage;
 import io.quarkiverse.telegram.bot.runtime.model.SendPhotoJsonRequest;
+import io.quarkiverse.telegram.bot.runtime.model.SendVideoJsonRequest;
+import io.quarkiverse.telegram.bot.runtime.model.SendVoiceJsonRequest;
 import io.quarkiverse.telegram.bot.runtime.model.SetMyCommandsRequest;
 import io.quarkiverse.telegram.bot.runtime.model.SetWebhookRequest;
 import io.quarkiverse.telegram.bot.runtime.model.TelegramResponse;
@@ -118,6 +125,85 @@ public class TelegramBotClient {
 
     public Uni<Message> editMessageText(long chatId, long messageId, String text, ReplyMarkup replyMarkup) {
         return editChatMessageText(new EditMessageText(chatId, messageId, text, replyMarkup));
+    }
+
+    public Uni<Message> editMessageText(String chatId, long messageId, String text) {
+        return editChatMessageText(new EditMessageText(chatId, messageId, text, null));
+    }
+
+    public Uni<Message> editMessageText(String chatId, long messageId, String text, ReplyMarkup replyMarkup) {
+        return editChatMessageText(new EditMessageText(chatId, messageId, text, replyMarkup));
+    }
+
+    // --- editMessageReplyMarkup ---
+
+    public Uni<EditMessageResult> editMessageReplyMarkup(EditMessageReplyMarkup request) {
+        return extractResult(api.editMessageReplyMarkup(token(), request));
+    }
+
+    public Uni<Message> editChatMessageReplyMarkup(EditMessageReplyMarkup request) {
+        return editMessageReplyMarkup(request).map(EditMessageResult::asMessage);
+    }
+
+    public Uni<Message> editMessageReplyMarkup(long chatId, long messageId, ReplyMarkup replyMarkup) {
+        return editChatMessageReplyMarkup(new EditMessageReplyMarkup(chatId, messageId, replyMarkup));
+    }
+
+    public Uni<Message> editMessageReplyMarkup(long chatId, long messageId) {
+        return editChatMessageReplyMarkup(new EditMessageReplyMarkup(chatId, messageId));
+    }
+
+    public Uni<Message> editMessageReplyMarkup(String chatId, long messageId, ReplyMarkup replyMarkup) {
+        return editChatMessageReplyMarkup(new EditMessageReplyMarkup(chatId, messageId, replyMarkup));
+    }
+
+    public Uni<Message> editMessageReplyMarkup(String chatId, long messageId) {
+        return editChatMessageReplyMarkup(new EditMessageReplyMarkup(chatId, messageId));
+    }
+
+    public Uni<Boolean> editInlineMessageReplyMarkup(String inlineMessageId, ReplyMarkup replyMarkup) {
+        return editMessageReplyMarkup(new EditMessageReplyMarkup(inlineMessageId, replyMarkup))
+                .map(EditMessageResult::isInline);
+    }
+
+    public Uni<Boolean> editInlineMessageReplyMarkup(String inlineMessageId) {
+        return editInlineMessageReplyMarkup(inlineMessageId, null);
+    }
+
+    // --- deleteMessage ---
+
+    public Uni<Boolean> deleteMessage(DeleteMessage request) {
+        return extractResult(api.deleteMessage(token(), request));
+    }
+
+    public Uni<Boolean> deleteMessage(long chatId, long messageId) {
+        return deleteMessage(new DeleteMessage(chatId, messageId));
+    }
+
+    public Uni<Boolean> deleteMessage(String chatId, long messageId) {
+        return deleteMessage(new DeleteMessage(chatId, messageId));
+    }
+
+    // --- sendChatAction ---
+
+    public Uni<Boolean> sendChatAction(SendChatAction request) {
+        return extractResult(api.sendChatAction(token(), request));
+    }
+
+    public Uni<Boolean> sendChatAction(long chatId, String action) {
+        return sendChatAction(new SendChatAction(chatId, action));
+    }
+
+    public Uni<Boolean> sendChatAction(long chatId, ChatAction action) {
+        return sendChatAction(new SendChatAction(chatId, action));
+    }
+
+    public Uni<Boolean> sendChatAction(String chatId, String action) {
+        return sendChatAction(new SendChatAction(chatId, action));
+    }
+
+    public Uni<Boolean> sendChatAction(String chatId, ChatAction action) {
+        return sendChatAction(new SendChatAction(chatId, action));
     }
 
     // --- answerCallbackQuery ---
@@ -290,7 +376,7 @@ public class TelegramBotClient {
         }
     }
 
-    private ClientMultipartForm baseMultipart(long chatId, String caption, ReplyMarkup markup) {
+    private ClientMultipartForm baseMultipart(Object chatId, String caption, ReplyMarkup markup) {
         ClientMultipartForm form = ClientMultipartForm.create()
                 .attribute("chat_id", String.valueOf(chatId), "text/plain");
 
@@ -305,6 +391,192 @@ public class TelegramBotClient {
             }
         }
         return form;
+    }
+
+    // --- sendVideo ---
+
+    public Uni<Message> sendVideo(long chatId, InputFile video) {
+        return sendVideo(chatId, video, null, null);
+    }
+
+    public Uni<Message> sendVideo(long chatId, InputFile video, String caption) {
+        return sendVideo(chatId, video, caption, null);
+    }
+
+    public Uni<Message> sendVideo(long chatId, InputFile video, String caption, ReplyMarkup markup) {
+        return switch (video) {
+            case InputFile.FileId(var id) -> extractResult(api.sendVideoJson(
+                    token(), new SendVideoJsonRequest(chatId, id, caption, markup)));
+
+            case InputFile.Url(var url) -> extractResult(api.sendVideoJson(
+                    token(), new SendVideoJsonRequest(chatId, url, caption, markup)));
+
+            case InputFile.BinaryPath(var path, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("video", fileName, path.toAbsolutePath().toString(), contentType);
+                yield extractMultipartResult(api.sendVideoMultipart(token(), form));
+            }
+
+            case InputFile.BinaryBytes(var bytes, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("video", fileName, Buffer.buffer(bytes), contentType);
+                yield extractMultipartResult(api.sendVideoMultipart(token(), form));
+            }
+        };
+    }
+
+    public Uni<Message> sendVideo(String chatId, InputFile video) {
+        return sendVideo(chatId, video, null, null);
+    }
+
+    public Uni<Message> sendVideo(String chatId, InputFile video, String caption) {
+        return sendVideo(chatId, video, caption, null);
+    }
+
+    public Uni<Message> sendVideo(String chatId, InputFile video, String caption, ReplyMarkup markup) {
+        return switch (video) {
+            case InputFile.FileId(var id) -> extractResult(api.sendVideoJson(
+                    token(), new SendVideoJsonRequest(chatId, id, caption, markup)));
+
+            case InputFile.Url(var url) -> extractResult(api.sendVideoJson(
+                    token(), new SendVideoJsonRequest(chatId, url, caption, markup)));
+
+            case InputFile.BinaryPath(var path, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("video", fileName, path.toAbsolutePath().toString(), contentType);
+                yield extractMultipartResult(api.sendVideoMultipart(token(), form));
+            }
+
+            case InputFile.BinaryBytes(var bytes, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("video", fileName, Buffer.buffer(bytes), contentType);
+                yield extractMultipartResult(api.sendVideoMultipart(token(), form));
+            }
+        };
+    }
+
+    // --- sendAnimation ---
+
+    public Uni<Message> sendAnimation(long chatId, InputFile animation) {
+        return sendAnimation(chatId, animation, null, null);
+    }
+
+    public Uni<Message> sendAnimation(long chatId, InputFile animation, String caption) {
+        return sendAnimation(chatId, animation, caption, null);
+    }
+
+    public Uni<Message> sendAnimation(long chatId, InputFile animation, String caption, ReplyMarkup markup) {
+        return switch (animation) {
+            case InputFile.FileId(var id) -> extractResult(api.sendAnimationJson(
+                    token(), new SendAnimationJsonRequest(chatId, id, caption, markup)));
+
+            case InputFile.Url(var url) -> extractResult(api.sendAnimationJson(
+                    token(), new SendAnimationJsonRequest(chatId, url, caption, markup)));
+
+            case InputFile.BinaryPath(var path, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("animation", fileName, path.toAbsolutePath().toString(), contentType);
+                yield extractMultipartResult(api.sendAnimationMultipart(token(), form));
+            }
+
+            case InputFile.BinaryBytes(var bytes, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("animation", fileName, Buffer.buffer(bytes), contentType);
+                yield extractMultipartResult(api.sendAnimationMultipart(token(), form));
+            }
+        };
+    }
+
+    public Uni<Message> sendAnimation(String chatId, InputFile animation) {
+        return sendAnimation(chatId, animation, null, null);
+    }
+
+    public Uni<Message> sendAnimation(String chatId, InputFile animation, String caption) {
+        return sendAnimation(chatId, animation, caption, null);
+    }
+
+    public Uni<Message> sendAnimation(String chatId, InputFile animation, String caption, ReplyMarkup markup) {
+        return switch (animation) {
+            case InputFile.FileId(var id) -> extractResult(api.sendAnimationJson(
+                    token(), new SendAnimationJsonRequest(chatId, id, caption, markup)));
+
+            case InputFile.Url(var url) -> extractResult(api.sendAnimationJson(
+                    token(), new SendAnimationJsonRequest(chatId, url, caption, markup)));
+
+            case InputFile.BinaryPath(var path, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("animation", fileName, path.toAbsolutePath().toString(), contentType);
+                yield extractMultipartResult(api.sendAnimationMultipart(token(), form));
+            }
+
+            case InputFile.BinaryBytes(var bytes, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("animation", fileName, Buffer.buffer(bytes), contentType);
+                yield extractMultipartResult(api.sendAnimationMultipart(token(), form));
+            }
+        };
+    }
+
+    // --- sendVoice ---
+
+    public Uni<Message> sendVoice(long chatId, InputFile voice) {
+        return sendVoice(chatId, voice, null, null);
+    }
+
+    public Uni<Message> sendVoice(long chatId, InputFile voice, String caption) {
+        return sendVoice(chatId, voice, caption, null);
+    }
+
+    public Uni<Message> sendVoice(long chatId, InputFile voice, String caption, ReplyMarkup markup) {
+        return switch (voice) {
+            case InputFile.FileId(var id) -> extractResult(api.sendVoiceJson(
+                    token(), new SendVoiceJsonRequest(chatId, id, caption, markup)));
+
+            case InputFile.Url(var url) -> extractResult(api.sendVoiceJson(
+                    token(), new SendVoiceJsonRequest(chatId, url, caption, markup)));
+
+            case InputFile.BinaryPath(var path, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("voice", fileName, path.toAbsolutePath().toString(), contentType);
+                yield extractMultipartResult(api.sendVoiceMultipart(token(), form));
+            }
+
+            case InputFile.BinaryBytes(var bytes, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("voice", fileName, Buffer.buffer(bytes), contentType);
+                yield extractMultipartResult(api.sendVoiceMultipart(token(), form));
+            }
+        };
+    }
+
+    public Uni<Message> sendVoice(String chatId, InputFile voice) {
+        return sendVoice(chatId, voice, null, null);
+    }
+
+    public Uni<Message> sendVoice(String chatId, InputFile voice, String caption) {
+        return sendVoice(chatId, voice, caption, null);
+    }
+
+    public Uni<Message> sendVoice(String chatId, InputFile voice, String caption, ReplyMarkup markup) {
+        return switch (voice) {
+            case InputFile.FileId(var id) -> extractResult(api.sendVoiceJson(
+                    token(), new SendVoiceJsonRequest(chatId, id, caption, markup)));
+
+            case InputFile.Url(var url) -> extractResult(api.sendVoiceJson(
+                    token(), new SendVoiceJsonRequest(chatId, url, caption, markup)));
+
+            case InputFile.BinaryPath(var path, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("voice", fileName, path.toAbsolutePath().toString(), contentType);
+                yield extractMultipartResult(api.sendVoiceMultipart(token(), form));
+            }
+
+            case InputFile.BinaryBytes(var bytes, var fileName, var contentType) -> {
+                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
+                        .binaryFileUpload("voice", fileName, Buffer.buffer(bytes), contentType);
+                yield extractMultipartResult(api.sendVoiceMultipart(token(), form));
+            }
+        };
     }
 
     public TelegramBotApi api() {

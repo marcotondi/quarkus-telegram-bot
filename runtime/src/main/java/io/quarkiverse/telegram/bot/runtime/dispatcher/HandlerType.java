@@ -7,5 +7,7 @@ public enum HandlerType {
     STATE_MISMATCH,
     INLINE_QUERY,
     CHOSEN_INLINE_RESULT,
-    ERROR
+    ERROR,
+    BEFORE_UPDATE,
+    AFTER_UPDATE
 }

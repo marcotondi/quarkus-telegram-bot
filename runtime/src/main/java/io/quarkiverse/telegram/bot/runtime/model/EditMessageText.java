@@ -15,11 +15,19 @@ public record EditMessageText(
         @JsonProperty("reply_markup") ReplyMarkup replyMarkup) {
 
     public EditMessageText(long chatId, long messageId, String text) {
-        this(chatId, messageId, null, text, null, null);
+        this((Object) chatId, messageId, null, text, null, null);
     }
 
     public EditMessageText(long chatId, long messageId, String text, ReplyMarkup replyMarkup) {
-        this(chatId, messageId, null, text, null, replyMarkup);
+        this((Object) chatId, messageId, null, text, null, replyMarkup);
+    }
+
+    public EditMessageText(String chatId, long messageId, String text) {
+        this((Object) chatId, messageId, null, text, null, null);
+    }
+
+    public EditMessageText(String chatId, long messageId, String text, ReplyMarkup replyMarkup) {
+        this((Object) chatId, messageId, null, text, null, replyMarkup);
     }
 
     public EditMessageText(String inlineMessageId, String text, ReplyMarkup replyMarkup) {

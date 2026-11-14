@@ -14,6 +14,10 @@ import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 
 import io.quarkiverse.telegram.bot.runtime.TelegramBotRecorder;
+import io.quarkiverse.telegram.bot.runtime.api.AfterUpdate;
+import io.quarkiverse.telegram.bot.runtime.api.BeforeUpdate;
+import io.quarkiverse.telegram.bot.runtime.api.BotAdmin;
+import io.quarkiverse.telegram.bot.runtime.api.ChatType;
 import io.quarkiverse.telegram.bot.runtime.api.MessageType;
 import io.quarkiverse.telegram.bot.runtime.api.OnCallbackQuery;
 import io.quarkiverse.telegram.bot.runtime.api.OnChosenInlineResult;
@@ -22,9 +26,11 @@ import io.quarkiverse.telegram.bot.runtime.api.OnInlineQuery;
 import io.quarkiverse.telegram.bot.runtime.api.OnMessage;
 import io.quarkiverse.telegram.bot.runtime.api.OnState;
 import io.quarkiverse.telegram.bot.runtime.api.OnStateMismatch;
+import io.quarkiverse.telegram.bot.runtime.api.SecuredBot;
 import io.quarkiverse.telegram.bot.runtime.api.SessionPayload;
 import io.quarkiverse.telegram.bot.runtime.api.TelegramCommand;
 import io.quarkiverse.telegram.bot.runtime.api.TelegramExceptionHandler;
+import io.quarkiverse.telegram.bot.runtime.api.TelegramRoleResolver;
 import io.quarkiverse.telegram.bot.runtime.client.TelegramBotClient;
 import io.quarkiverse.telegram.bot.runtime.config.TelegramBotBuildTimeConfig;
 import io.quarkiverse.telegram.bot.runtime.dispatcher.HandlerDescriptor;
@@ -69,6 +75,12 @@ class TelegramBotProcessor {
     private static final DotName ON_ERROR = DotName.createSimple(OnError.class.getName());
     private static final DotName TELEGRAM_EXCEPTION_HANDLER = DotName.createSimple(TelegramExceptionHandler.class.getName());
     private static final DotName SESSION_PAYLOAD = DotName.createSimple(SessionPayload.class.getName());
+    private static final DotName CHAT_TYPE = DotName.createSimple(ChatType.class.getName());
+    private static final DotName BOT_ADMIN = DotName.createSimple(BotAdmin.class.getName());
+    private static final DotName SECURED_BOT = DotName.createSimple(SecuredBot.class.getName());
+    private static final DotName TELEGRAM_ROLE_RESOLVER = DotName.createSimple(TelegramRoleResolver.class.getName());
+    private static final DotName BEFORE_UPDATE = DotName.createSimple(BeforeUpdate.class.getName());
+    private static final DotName AFTER_UPDATE = DotName.createSimple(AfterUpdate.class.getName());
 
     @BuildStep
     FeatureBuildItem feature() {
@@ -141,7 +153,7 @@ class TelegramBotProcessor {
             boolean interrupts = ann.value("interruptsState") != null && ann.value("interruptsState").asBoolean();
             String state = getStateCondition(method);
 
-            handlers.produce(new HandlerBuildItem(new HandlerDescriptor(
+            HandlerDescriptor desc = new HandlerDescriptor(
                     HandlerType.COMMAND,
                     command,
                     method.declaringClass().name().toString(),
@@ -150,7 +162,9 @@ class TelegramBotProcessor {
                     interrupts,
                     state,
                     null,
-                    description)));
+                    description);
+            applySecurityAndFilters(desc, method);
+            handlers.produce(new HandlerBuildItem(desc));
         }
 
         // Scan @OnCallbackQuery
@@ -162,7 +176,7 @@ class TelegramBotProcessor {
             String pattern = ann.value() != null ? ann.value().asString() : "*";
             String state = getStateCondition(method);
 
-            handlers.produce(new HandlerBuildItem(new HandlerDescriptor(
+            HandlerDescriptor desc = new HandlerDescriptor(
                     HandlerType.CALLBACK_QUERY,
                     pattern,
                     method.declaringClass().name().toString(),
@@ -170,7 +184,9 @@ class TelegramBotProcessor {
                     extractParameterTypes(method),
                     false,
                     state,
-                    null)));
+                    null);
+            applySecurityAndFilters(desc, method);
+            handlers.produce(new HandlerBuildItem(desc));
         }
 
         // Scan @OnMessage
@@ -183,7 +199,7 @@ class TelegramBotProcessor {
             String messageType = typeVal != null ? typeVal.asEnum() : MessageType.ANY.name();
             String state = getStateCondition(method);
 
-            handlers.produce(new HandlerBuildItem(new HandlerDescriptor(
+            HandlerDescriptor desc = new HandlerDescriptor(
                     HandlerType.MESSAGE,
                     null,
                     method.declaringClass().name().toString(),
@@ -191,7 +207,9 @@ class TelegramBotProcessor {
                     extractParameterTypes(method),
                     false,
                     state,
-                    messageType)));
+                    messageType);
+            applySecurityAndFilters(desc, method);
+            handlers.produce(new HandlerBuildItem(desc));
         }
 
         // Scan @OnStateMismatch
@@ -201,7 +219,7 @@ class TelegramBotProcessor {
             botClasses.add(method.declaringClass().name().toString());
 
             String state = ann.value() != null ? ann.value().asString() : "";
-            handlers.produce(new HandlerBuildItem(new HandlerDescriptor(
+            HandlerDescriptor desc = new HandlerDescriptor(
                     HandlerType.STATE_MISMATCH,
                     null,
                     method.declaringClass().name().toString(),
@@ -209,7 +227,9 @@ class TelegramBotProcessor {
                     extractParameterTypes(method),
                     false,
                     state.isEmpty() ? null : state,
-                    null)));
+                    null);
+            applySecurityAndFilters(desc, method);
+            handlers.produce(new HandlerBuildItem(desc));
         }
 
         // Scan @OnInlineQuery
@@ -219,7 +239,7 @@ class TelegramBotProcessor {
             botClasses.add(method.declaringClass().name().toString());
 
             String pattern = ann.value() != null ? ann.value().asString() : "*";
-            handlers.produce(new HandlerBuildItem(new HandlerDescriptor(
+            HandlerDescriptor desc = new HandlerDescriptor(
                     HandlerType.INLINE_QUERY,
                     pattern,
                     method.declaringClass().name().toString(),
@@ -227,7 +247,9 @@ class TelegramBotProcessor {
                     extractParameterTypes(method),
                     false,
                     null,
-                    null)));
+                    null);
+            applySecurityAndFilters(desc, method);
+            handlers.produce(new HandlerBuildItem(desc));
         }
 
         // Scan @OnChosenInlineResult
@@ -237,7 +259,7 @@ class TelegramBotProcessor {
             botClasses.add(method.declaringClass().name().toString());
 
             String pattern = ann.value() != null ? ann.value().asString() : "*";
-            handlers.produce(new HandlerBuildItem(new HandlerDescriptor(
+            HandlerDescriptor desc = new HandlerDescriptor(
                     HandlerType.CHOSEN_INLINE_RESULT,
                     pattern,
                     method.declaringClass().name().toString(),
@@ -245,7 +267,47 @@ class TelegramBotProcessor {
                     extractParameterTypes(method),
                     false,
                     null,
-                    null)));
+                    null);
+            applySecurityAndFilters(desc, method);
+            handlers.produce(new HandlerBuildItem(desc));
+        }
+
+        // Scan @BeforeUpdate
+        for (AnnotationInstance ann : index.getIndex().getAnnotations(BEFORE_UPDATE)) {
+            MethodInfo method = ann.target().asMethod();
+            registerMethodAndClass(method, reflectiveMethods, reflectiveClasses);
+            botClasses.add(method.declaringClass().name().toString());
+
+            AnnotationValue priorityVal = ann.value("priority");
+            int priority = priorityVal != null ? priorityVal.asInt() : 0;
+
+            HandlerDescriptor desc = new HandlerDescriptor(
+                    HandlerType.BEFORE_UPDATE,
+                    null,
+                    method.declaringClass().name().toString(),
+                    method.name(),
+                    extractParameterTypes(method));
+            desc.setPriority(priority);
+            handlers.produce(new HandlerBuildItem(desc));
+        }
+
+        // Scan @AfterUpdate
+        for (AnnotationInstance ann : index.getIndex().getAnnotations(AFTER_UPDATE)) {
+            MethodInfo method = ann.target().asMethod();
+            registerMethodAndClass(method, reflectiveMethods, reflectiveClasses);
+            botClasses.add(method.declaringClass().name().toString());
+
+            AnnotationValue priorityVal = ann.value("priority");
+            int priority = priorityVal != null ? priorityVal.asInt() : 0;
+
+            HandlerDescriptor desc = new HandlerDescriptor(
+                    HandlerType.AFTER_UPDATE,
+                    null,
+                    method.declaringClass().name().toString(),
+                    method.name(),
+                    extractParameterTypes(method));
+            desc.setPriority(priority);
+            handlers.produce(new HandlerBuildItem(desc));
         }
 
         // Scan @OnError
@@ -290,8 +352,70 @@ class TelegramBotProcessor {
             }
         }
 
+        // Scan TelegramRoleResolver implementors
+        for (ClassInfo clazz : index.getIndex().getAllKnownImplementors(TELEGRAM_ROLE_RESOLVER)) {
+            reflectiveClasses.produce(ReflectiveClassBuildItem.builder(clazz.name().toString())
+                    .constructors().methods().fields().build());
+            botClasses.add(clazz.name().toString());
+        }
+
         unremovableBeans
                 .produce(new UnremovableBeanBuildItem(beanInfo -> botClasses.contains(beanInfo.getBeanClass().toString())));
+    }
+
+    private void applySecurityAndFilters(HandlerDescriptor descriptor, MethodInfo method) {
+        // 1. ChatType
+        AnnotationInstance chatTypeAnn = method.annotation(CHAT_TYPE);
+        if (chatTypeAnn == null) {
+            chatTypeAnn = method.declaringClass().declaredAnnotation(CHAT_TYPE);
+        }
+        if (chatTypeAnn != null) {
+            AnnotationValue val = chatTypeAnn.value();
+            if (val != null) {
+                List<String> types = new ArrayList<>();
+                if (val.kind() == AnnotationValue.Kind.ARRAY) {
+                    for (String s : val.asEnumArray()) {
+                        types.add(s.toLowerCase());
+                    }
+                } else if (val.kind() == AnnotationValue.Kind.ENUM) {
+                    types.add(val.asEnum().toLowerCase());
+                }
+                descriptor.setAllowedChatTypes(types);
+            }
+        }
+
+        // 2. BotAdmin
+        AnnotationInstance botAdminAnn = method.annotation(BOT_ADMIN);
+        if (botAdminAnn == null) {
+            botAdminAnn = method.declaringClass().declaredAnnotation(BOT_ADMIN);
+        }
+        if (botAdminAnn != null) {
+            descriptor.setAdminOnly(true);
+            AnnotationValue silentVal = botAdminAnn.value("silent");
+            if (silentVal != null && silentVal.asBoolean()) {
+                descriptor.setSilentSecurity(true);
+            }
+        }
+
+        // 3. SecuredBot
+        AnnotationInstance securedAnn = method.annotation(SECURED_BOT);
+        if (securedAnn == null) {
+            securedAnn = method.declaringClass().declaredAnnotation(SECURED_BOT);
+        }
+        if (securedAnn != null) {
+            AnnotationValue rolesVal = securedAnn.value("roles");
+            if (rolesVal != null) {
+                descriptor.setRequiredRoles(List.of(rolesVal.asStringArray()));
+            }
+            AnnotationValue usersVal = securedAnn.value("allowedUsers");
+            if (usersVal != null) {
+                descriptor.setAllowedUsers(List.of(usersVal.asStringArray()));
+            }
+            AnnotationValue silentVal = securedAnn.value("silent");
+            if (silentVal != null && silentVal.asBoolean()) {
+                descriptor.setSilentSecurity(true);
+            }
+        }
     }
 
     private void registerMethodAndClass(

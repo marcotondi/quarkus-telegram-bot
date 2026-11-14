@@ -1,6 +1,7 @@
 package io.quarkiverse.telegram.bot.runtime.config;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 
 import io.quarkus.runtime.annotations.ConfigPhase;
@@ -52,6 +53,11 @@ public interface TelegramBotConfig {
      * Session and conversation state configuration.
      */
     SessionConfig session();
+
+    /**
+     * Security and authorization configuration.
+     */
+    SecurityConfig security();
 
     enum TransportMode {
         AUTO,
@@ -124,5 +130,15 @@ public interface TelegramBotConfig {
          */
         @WithDefault("15m")
         Duration ttl();
+    }
+
+    /**
+     * Security and authorization configuration.
+     */
+    interface SecurityConfig {
+        /**
+         * Comma-separated list of Telegram user IDs considered bot administrators.
+         */
+        Optional<java.util.List<Long>> adminIds();
     }
 }

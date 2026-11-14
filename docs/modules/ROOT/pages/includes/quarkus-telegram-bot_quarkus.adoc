@@ -1,0 +1,322 @@
+[.configuration-legend]
+icon:lock[title=Fixed at build time] Configuration property fixed at build time - All other configuration properties are overridable at runtime
+[.configuration-reference.searchable, cols="80,.^10,.^10"]
+|===
+
+h|[.header-title]##Configuration property##
+h|Type
+h|Default
+
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-token]] [.property-path]##link:#quarkus-telegram-bot_quarkus-token[`+++quarkus.token+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.token+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Token issued by @BotFather.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_TOKEN+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_TOKEN+++`
+endif::add-copy-button-to-env-var[]
+--
+|string
+|
+
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-bot-username]] [.property-path]##link:#quarkus-telegram-bot_quarkus-bot-username[`+++quarkus.bot-username+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.bot-username+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Optional bot username (without '@'). If configured, commands with an explicit target in group chats (e.g. '/start@MyBot') will only match if the target matches this username.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_BOT_USERNAME+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_BOT_USERNAME+++`
+endif::add-copy-button-to-env-var[]
+--
+|string
+|
+
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-mode]] [.property-path]##link:#quarkus-telegram-bot_quarkus-mode[`+++quarkus.mode+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.mode+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Transport mode: AUTO selects POLLING in dev/test, WEBHOOK in prod.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_MODE+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_MODE+++`
+endif::add-copy-button-to-env-var[]
+--
+a|`auto`, `polling`, `webhook`
+|`+++auto+++`
+
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-client-base-url]] [.property-path]##link:#quarkus-telegram-bot_quarkus-client-base-url[`+++quarkus.client.base-url+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.client.base-url+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Base URL of the Telegram Bot API server.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_CLIENT_BASE_URL+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_CLIENT_BASE_URL+++`
+endif::add-copy-button-to-env-var[]
+--
+|string
+|`+++https://api.telegram.org+++`
+
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-client-upload-timeout]] [.property-path]##link:#quarkus-telegram-bot_quarkus-client-upload-timeout[`+++quarkus.client.upload-timeout+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.client.upload-timeout+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Extended timeout for multipart file uploads up to 50 MB.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_CLIENT_UPLOAD_TIMEOUT+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_CLIENT_UPLOAD_TIMEOUT+++`
+endif::add-copy-button-to-env-var[]
+--
+|link:https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/time/Duration.html[Duration] link:#duration-note-anchor-quarkus-telegram-bot_quarkus[icon:question-circle[title=More information about the Duration format]]
+|`+++60S+++`
+
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-polling-timeout]] [.property-path]##link:#quarkus-telegram-bot_quarkus-polling-timeout[`+++quarkus.polling.timeout+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.polling.timeout+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Long polling timeout sent to Telegram in getUpdates.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_POLLING_TIMEOUT+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_POLLING_TIMEOUT+++`
+endif::add-copy-button-to-env-var[]
+--
+|link:https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/time/Duration.html[Duration] link:#duration-note-anchor-quarkus-telegram-bot_quarkus[icon:question-circle[title=More information about the Duration format]]
+|`+++30S+++`
+
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-polling-limit]] [.property-path]##link:#quarkus-telegram-bot_quarkus-polling-limit[`+++quarkus.polling.limit+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.polling.limit+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Maximum number of updates to receive per poll.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_POLLING_LIMIT+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_POLLING_LIMIT+++`
+endif::add-copy-button-to-env-var[]
+--
+|int
+|`+++100+++`
+
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-polling-enabled]] [.property-path]##link:#quarkus-telegram-bot_quarkus-polling-enabled[`+++quarkus.polling.enabled+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.polling.enabled+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Whether polling is enabled.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_POLLING_ENABLED+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_POLLING_ENABLED+++`
+endif::add-copy-button-to-env-var[]
+--
+|boolean
+|`+++true+++`
+
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-webhook-public-url]] [.property-path]##link:#quarkus-telegram-bot_quarkus-webhook-public-url[`+++quarkus.webhook.public-url+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.webhook.public-url+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Public HTTPS URL of the application (e.g. https://bot.example.com).
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_WEBHOOK_PUBLIC_URL+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_WEBHOOK_PUBLIC_URL+++`
+endif::add-copy-button-to-env-var[]
+--
+|string
+|
+
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-webhook-secret-token]] [.property-path]##link:#quarkus-telegram-bot_quarkus-webhook-secret-token[`+++quarkus.webhook.secret-token+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.webhook.secret-token+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Secret token to validate incoming webhook requests via X-Telegram-Bot-Api-Secret-Token.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_WEBHOOK_SECRET_TOKEN+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_WEBHOOK_SECRET_TOKEN+++`
+endif::add-copy-button-to-env-var[]
+--
+|string
+|
+
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-webhook-require-secret-token]] [.property-path]##link:#quarkus-telegram-bot_quarkus-webhook-require-secret-token[`+++quarkus.webhook.require-secret-token+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.webhook.require-secret-token+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Whether a secret token is strictly required. Defaults to true. If false, requests without token or with unconfigured secret token are permitted.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_WEBHOOK_REQUIRE_SECRET_TOKEN+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_WEBHOOK_REQUIRE_SECRET_TOKEN+++`
+endif::add-copy-button-to-env-var[]
+--
+|boolean
+|`+++true+++`
+
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-webhook-auto-register]] [.property-path]##link:#quarkus-telegram-bot_quarkus-webhook-auto-register[`+++quarkus.webhook.auto-register+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.webhook.auto-register+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Automatically register webhook on Telegram startup when publicUrl is present.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_WEBHOOK_AUTO_REGISTER+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_WEBHOOK_AUTO_REGISTER+++`
+endif::add-copy-button-to-env-var[]
+--
+|boolean
+|`+++true+++`
+
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-session-ttl]] [.property-path]##link:#quarkus-telegram-bot_quarkus-session-ttl[`+++quarkus.session.ttl+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.session.ttl+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Automatic expiration TTL for inactive conversation sessions.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_SESSION_TTL+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_SESSION_TTL+++`
+endif::add-copy-button-to-env-var[]
+--
+|link:https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/time/Duration.html[Duration] link:#duration-note-anchor-quarkus-telegram-bot_quarkus[icon:question-circle[title=More information about the Duration format]]
+|`+++15M+++`
+
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-security]] [.property-path]##link:#quarkus-telegram-bot_quarkus-security[`+++quarkus.security+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.security+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_SECURITY+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_SECURITY+++`
+endif::add-copy-button-to-env-var[]
+--
+|SecurityConfig
+|required icon:exclamation-circle[title=Configuration property is required]
+
+|===
+
+ifndef::no-duration-note[]
+[NOTE]
+[id=duration-note-anchor-quarkus-telegram-bot_quarkus]
+.About the Duration format
+====
+To write duration values, use the standard `java.time.Duration` format.
+See the link:https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/time/Duration.html#parse(java.lang.CharSequence)[Duration#parse() Java API documentation] for more information.
+
+You can also use a simplified format, starting with a number:
+
+* If the value is only a number, it represents time in seconds.
+* If the value is a number followed by `ms`, it represents time in milliseconds.
+
+In other cases, the simplified format is translated to the `java.time.Duration` format for parsing:
+
+* If the value is a number followed by `h`, `m`, or `s`, it is prefixed with `PT`.
+* If the value is a number followed by `d`, it is prefixed with `P`.
+====
+endif::no-duration-note[]

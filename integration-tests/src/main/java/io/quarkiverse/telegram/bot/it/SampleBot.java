@@ -18,7 +18,10 @@ import io.quarkiverse.telegram.bot.runtime.model.AnswerCallbackQuery;
 import io.quarkiverse.telegram.bot.runtime.model.AnswerInlineQuery;
 import io.quarkiverse.telegram.bot.runtime.model.CallbackQuery;
 import io.quarkiverse.telegram.bot.runtime.model.Chat;
+import io.quarkiverse.telegram.bot.runtime.model.ChatAction;
 import io.quarkiverse.telegram.bot.runtime.model.ChosenInlineResult;
+import io.quarkiverse.telegram.bot.runtime.model.DeleteMessage;
+import io.quarkiverse.telegram.bot.runtime.model.EditMessageReplyMarkup;
 import io.quarkiverse.telegram.bot.runtime.model.EditMessageText;
 import io.quarkiverse.telegram.bot.runtime.model.InlineKeyboard;
 import io.quarkiverse.telegram.bot.runtime.model.InlineQuery;
@@ -26,6 +29,7 @@ import io.quarkiverse.telegram.bot.runtime.model.InlineQueryResult;
 import io.quarkiverse.telegram.bot.runtime.model.InlineQueryResultArticle;
 import io.quarkiverse.telegram.bot.runtime.model.InputTextMessageContent;
 import io.quarkiverse.telegram.bot.runtime.model.Message;
+import io.quarkiverse.telegram.bot.runtime.model.SendChatAction;
 import io.quarkiverse.telegram.bot.runtime.model.SendMessage;
 import io.quarkiverse.telegram.bot.runtime.model.Update;
 import io.quarkiverse.telegram.bot.runtime.model.User;
@@ -190,5 +194,20 @@ public class SampleBot {
     public Uni<Void> handleAsync(AsyncFailureException ex, Update update, ConversationContext ctx) {
         Long chatId = update.message().chat().id();
         return botClient.sendMessage(chatId, "AsyncHandled: " + ex.getMessage()).replaceWithVoid();
+    }
+
+    @TelegramCommand("/test-delete")
+    public DeleteMessage onDeleteCommand(Chat chat) {
+        return new DeleteMessage(chat.id(), 12345L);
+    }
+
+    @TelegramCommand("/test-action")
+    public SendChatAction onActionCommand(Chat chat) {
+        return new SendChatAction(chat.id(), ChatAction.TYPING);
+    }
+
+    @OnCallbackQuery("markup_*")
+    public EditMessageReplyMarkup onMarkupCallback(Chat chat, CallbackQuery query) {
+        return new EditMessageReplyMarkup(chat.id(), 999L, InlineKeyboard.of("Updated", "markup_done"));
     }
 }
