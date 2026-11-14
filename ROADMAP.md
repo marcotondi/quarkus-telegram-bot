@@ -31,7 +31,9 @@ Questo documento raccoglie la roadmap delle funzionalità implementate e i requi
 Per dichiarare conclusa la **v1.0.0** e pronta per l'onboarding in Quarkiverse, sono pianificati i seguenti blocchi:
 
 ### 1. Quarkus Dev UI v2 (`/q/dev-ui`) — *Priorità Alta (P1)*
+
 Fornire la console visuale di diagnostica per gli sviluppatori in modalità `quarkus dev`:
+
 - [ ] **Card Telegram Bot**:
   - Stato identità del bot: Username, Bot ID, modalità attiva (`POLLING` vs `WEBHOOK`), webhook path, stato del token.
 - [ ] **Tabella degli Handler & Mappa FSM**:
@@ -41,7 +43,9 @@ Fornire la console visuale di diagnostica per gli sviluppatori in modalità `qua
 ---
 
 ### 2. Integrazioni Ecosistema Quarkus (Enterprise Readiness) — *Priorità Media (P2)*
+
 Allineamento con i pattern ufficiali delle estensioni Quarkiverse:
+
 - [ ] **Health Check Opzionale ([SmallRye Health](https://quarkus.io/guides/smallrye-health))**:
   - Fornitura di un `TelegramBotHealthCheck` (readiness) attivo condizionalmente se `quarkus-smallrye-health` è nel classpath.
   - Verifica che il thread di Polling sia operativo e privo di errori critici o che il Webhook sia attivo e configurato.
@@ -53,9 +57,10 @@ Allineamento con i pattern ufficiali delle estensioni Quarkiverse:
 ---
 
 ### 3. Certificazione Finale & Documentazione — *Priorità Pre-Release (P3)*
+
 - [ ] **Verifica Eseguibile Nativo (GraalVM / Mandrel)**:
   - Esecuzione del test nativo `TelegramBotResourceIT` (`mvn verify -Pnative`) in container Podman per verificare l'assenza di gap di reflection a runtime.
-- [ ] **Allineamento Documentazione**:
+- [X] **Allineamento Documentazione**:
   - Completamento di `config-reference.adoc` con la lista esaustiva di tutte le property di configurazione (`quarkus.telegram.*`).
   - Documentazione delle guide su Redis DevServices, Interceptors e filtri di sicurezza.
 
@@ -64,6 +69,7 @@ Allineamento con i pattern ufficiali delle estensioni Quarkiverse:
 ## Backlog Post-1.0.0 (Versioni Future)
 
 Funzionalità avanzate pianificate per rilasci successivi:
+
 - [ ] **Validazione Telegram Mini Apps (Web Apps)**:
   - Utility crittografica per validare a runtime l'hash `initData` generato dalle Web Apps di Telegram (HMAC-SHA256 con bot token).
 - [ ] **Simulatore Interattivo Web in Dev UI**:
