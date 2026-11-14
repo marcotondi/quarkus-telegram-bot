@@ -20,6 +20,10 @@
   ```bash
   mvn test -pl integration-tests -Dtest=TelegramFsmTest
   ```
+* **Run a Single Test Class from Root Reactor**:
+  ```bash
+  mvn test -Dtest=TelegramInlineQueryTest -Dsurefire.failIfNoSpecifiedTests=false
+  ```
 * **Run a Single Test Method**:
   ```bash
   mvn test -pl integration-tests -Dtest=TelegramFsmTest#testFullBookingConversationFlow
@@ -48,12 +52,15 @@
 * **Model Codegen**:
   The 232 Telegram Bot API 8.x models (records & sealed interfaces) in `runtime/target/generated-sources/telegram` are generated during `runtime` compilation using `exec:java` invoking `TelegramModelGenerator`. If modifying OpenAPI schemas or codegen logic, re-install `codegen` first (`mvn install -pl codegen -DskipTests`).
 
+* **Offline / Pre-cached Plugin Trap**:
+  `parent` is pinned to `quarkiverse-parent:22`. Upgrading parent or maven plugins requires pre-cached artifacts in `~/.m2`; in sandbox/offline environments, never bump parent without checking whether new plugin jars (e.g. `maven-jar-plugin:3.5.1`, `maven-archiver:3.6.6`) are already present in the local cache.
+
 ---
 
 ## CDI & ArC Gotchas
 
 * **Unremovable Bot Beans**:
-  Telegram bot handlers (`@TelegramCommand`, `@OnCallbackQuery`, `@OnMessage`, `@OnStateMismatch`) are invoked dynamically by `UpdateDispatcher` and not injected into other beans. ArC will aggressively eliminate them as unused unless protected.
+  Telegram bot handlers (`@TelegramCommand`, `@OnCallbackQuery`, `@OnMessage`, `@OnStateMismatch`, `@OnInlineQuery`, `@OnChosenInlineResult`, `@OnError`, and beans implementing `TelegramExceptionHandler`) are invoked dynamically by `UpdateDispatcher` and not injected into other beans. ArC will aggressively eliminate them as unused unless protected.
   * *Quirk*: `UnremovableBeanBuildItem.beanClassNames(String...)` passes string sets to `BeanTypesExclusion` which checks against `Set<DotName>`, failing due to Java type erasure.
   * *Pattern*: Use `UnremovableBeanBuildItem(beanInfo -> botClasses.contains(beanInfo.getBeanClass().toString()))` in `TelegramBotProcessor`.
 
@@ -73,7 +80,8 @@
 
 ## Testing & DevServices
 
-* **WireMock Harness**:
-  Integration tests use `TelegramMockServer` (`@QuarkusTestResource(TelegramMockServer.class)`) which stubs Telegram API endpoints (`getMe`, `deleteWebhook`, `sendMessage`) on dynamic ports.
+* **WireMock Harness & Dynamic Port Trap**:
+  Integration tests use `TelegramMockServer` (`@QuarkusTestResource(TelegramMockServer.class)`) which stubs Telegram API endpoints (`getMe`, `deleteWebhook`, `sendMessage`, `answerInlineQuery`, etc.) on dynamic ports.
+  * *Trap*: **NEVER call static `WireMock.verify(...)`**; it defaults to port `8080` and throws `HttpHostConnectException: Connection refused`. Always call `TelegramMockServer.getWireMockServer().verify(...)` or the test helper `verifyWithRetry(...)`.
 * **Redis Tests**:
   `RedisSessionStoreTest` uses Mockito mocks on `ReactiveRedisDataSource` rather than live Testcontainers, preventing Docker/Podman socket permission issues. `quarkus.redis.devservices.enabled=false` is set in `integration-tests/src/main/resources/application.properties`.
