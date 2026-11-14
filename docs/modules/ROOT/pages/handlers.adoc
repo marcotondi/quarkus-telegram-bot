@@ -1,0 +1,202 @@
+= Handlers & Routing
+
+include::./includes/attributes.adoc[]
+
+Annotated methods on CDI beans (`@ApplicationScoped`, `@Singleton`, `@Dependent`) receive updates. Handlers are discovered at build time and are not required to be injected anywhere.
+
+== Annotations
+
+|===
+|Annotation |Matches |Attributes
+
+|`@TelegramCommand`
+|Messages whose first word is the command
+|`value` (`"/start"` or `"start"`, case-insensitive, leading `/` optional), `description` (registered via `setMyCommands`), `interruptsState` (handled even while a conversation is active)
+
+|`@OnMessage`
+|Any non-command message
+|`type` (`TEXT`, `PHOTO`, `DOCUMENT`, `VOICE`, `LOCATION`, `ANY`)
+
+|`@OnCallbackQuery`
+|Callback data from inline buttons
+|`value` pattern, default `*`
+
+|`@OnInlineQuery`
+|Inline queries (`@bot query`)
+|`value` pattern, default `*`
+
+|`@OnChosenInlineResult`
+|Chosen inline results
+|`value` pattern against `result_id`, default `*`
+
+|`@OnState`
+|Updates while the conversation is in a state
+|`value` state name
+
+|`@OnStateMismatch`
+|Updates in an active state with no matching state handler
+|`value` optional state name; empty acts as global fallback
+
+|`@OnError`
+|Exceptions thrown during dispatch
+|`value` exception class, default `Throwable`
+
+|`@BeforeUpdate` / `@AfterUpdate`
+|Every update, before/after dispatch
+|`priority` (lower runs first)
+|===
+
+Patterns support an exact match or a single trailing wildcard (`order_*`). There are no placeholders such as `{id}`: the text after the prefix is passed to `@CallbackParam` / `String` parameters.
+
+[source,java]
+----
+@OnCallbackQuery("order_*")
+public String cancel(@CallbackParam String orderId) { // receives the suffix after "order_"
+    return "Ordine " + orderId + " annullato";
+}
+----
+
+== Parameter injection
+
+The dispatcher fills method parameters by type, in any order:
+
+[cols="1,2"]
+|===
+|Type |Value
+
+|`Update` |The raw update
+|`Message` / `MaybeInaccessibleMessage` |The message, including the one behind a callback query
+|`CallbackQuery` |The callback query
+|`InlineQuery` / `ChosenInlineResult` |The inline query or chosen result
+|`User` / `Chat` |Sender and chat
+|`ConversationContext` |Current conversation
+|`TelegramBotClient` |Client for outbound calls
+|`String` |Text after a wildcard prefix: callback suffix, inline query suffix, `result_id` suffix
+|`Throwable` |Only in `@OnError` handlers
+|Any other class |Session payload from `ConversationContext.data(type)`, `null` if absent
+|===
+
+`@CallbackParam` does not change how a value is resolved: every `String` parameter receives the text after the wildcard prefix. The annotation documents the intent and helps when the handler has other `String` parameters.
+
+== Return types
+
+[cols="1,2"]
+|===
+|Returned value |Effect
+
+|`String` |Sends a text message to the current chat
+|`SendMessage` |Sends a message; `chatId` must be set explicitly
+|`EditMessageText` |Edits the clicked message; `chatId` and `messageId` are filled automatically for callback queries
+|`EditMessageReplyMarkup` |Replaces the inline keyboard of the clicked message
+|`DeleteMessage`, `SendChatAction` |Deletes a message / sends a chat action
+|`AnswerCallbackQuery` |Answers the callback query; the `callbackQueryId` is filled automatically
+|`AnswerInlineQuery` |Answers the inline query; the `inlineQueryId` is filled automatically
+|`InlineQueryResult` or `List<InlineQueryResult>` |Answered automatically for inline queries
+|`Uni<T>` |Unwrapped; the inner value is handled as above
+|`void` / `null` |Nothing is sent; callback queries are still answered to stop the spinner
+|===
+
+== Callbacks and in-place pagination
+
+[source,java]
+----
+@TelegramCommand("/catalogo")
+public SendMessage catalog(Chat chat) {
+    return SendMessage.builder()
+            .chatId(chat.id())
+            .text("Catalogo - Pagina 1")
+            .replyMarkup(InlineKeyboard.of("Avanti ➡️", "page_2"))
+            .build();
+}
+
+@OnCallbackQuery("page_*")
+public EditMessageText page(@CallbackParam String page) {
+    int next = Integer.parseInt(page) + 1;
+    return EditMessageText.builder()
+            .text("Catalogo - Pagina " + page)
+            .replyMarkup(InlineKeyboard.of("Avanti ➡️", "page_" + next))
+            .build();
+}
+
+@OnCallbackQuery("info_*")
+public AnswerCallbackQuery info(@CallbackParam String item) {
+    return AnswerCallbackQuery.builder().text("Dettagli su: " + item).showAlert(true).build();
+}
+----
+
+[[inline-queries]]
+== Inline queries
+
+[source,java]
+----
+@OnInlineQuery("search_*")
+public List<InlineQueryResult> search(String suffix) { // "cats" for the query "search_cats"
+    return List.of(InlineQueryResultArticle.builder()
+            .id("1")
+            .type("article")
+            .title("Cerca: " + suffix)
+            .inputMessageContent(new InputTextMessageContent("Risultato per: " + suffix, null, null, null))
+            .build());
+}
+
+@OnChosenInlineResult("*")
+public void chosen(ChosenInlineResult result) {
+    // result.resultId(), result.query(), result.from()
+}
+----
+
+Return `List.of()` to answer with no results.
+
+== Error handling
+
+Exceptions thrown by a handler go to the most specific `@OnError` handler whose exception class matches. Handlers declared in the failing bean itself take precedence over global ones; `SecurityException` subclasses are logged as warnings instead of errors.
+
+[source,java]
+----
+@OnError(IllegalArgumentException.class)
+public String validation(IllegalArgumentException ex) {
+    return "Input non valido: " + ex.getMessage();
+}
+
+@OnError(Throwable.class)
+public Uni<Void> fallback(Throwable ex, Update update, TelegramBotClient bot) {
+    return bot.sendMessage(update.message().chat().id(), "Errore imprevisto").replaceWithVoid();
+}
+
+@OnError
+public void silent(Throwable ex) {
+    // @OnError without a value handles Throwable
+}
+----
+
+Error handlers may return `void`, `String`, `SendMessage`, `EditMessageText` or `Uni<T>`. Without any matching `@OnError`, the exception is logged and the update is dropped.
+
+== Lifecycle hooks
+
+`@BeforeUpdate` runs before dispatch; returning `false` (or `Uni<Boolean>` with `false`) aborts handling of the update. `@AfterUpdate` always runs, including after a failure, and may receive the error as a `Throwable` parameter.
+
+[source,java]
+----
+@BeforeUpdate(priority = 10)
+public boolean rateLimit(User user) {
+    return !blockedUsers.contains(user.id());
+}
+
+@AfterUpdate
+public void audit(Update update, Throwable error) {
+    LOG.infof("update %d finished, error=%s", update.updateId(), error);
+}
+----
+
+== Chat type filter
+
+`@ChatType` restricts a method or a whole bean to specific chat kinds (`PRIVATE`, `GROUP`, `SUPERGROUP`, `CHANNEL`).
+
+[source,java]
+----
+@ChatType(ChatType.Type.GROUP)
+@TelegramCommand("/rules")
+public String rules() {
+    return "Regolamento del gruppo";
+}
+----

@@ -1,0 +1,161 @@
+= Conversations & FSM
+
+include::./includes/attributes.adoc[]
+
+Each `(chatId, userId)` pair has its own conversation state. Updates from the same user are serialized per key, so rapid button taps cannot interleave state transitions.
+
+== ConversationContext
+
+[source,java]
+----
+public interface ConversationContext {
+    Optional<String> currentState();
+    <T> Optional<T> data(Class<T> type);
+    void transitionTo(String nextState, Object data);
+    default void transitionTo(String nextState);   // payload null
+    void complete();                               // clears state and payload
+}
+----
+
+Inject it as a handler parameter; no configuration is required.
+
+== Example: booking flow
+
+[source,java]
+----
+@ApplicationScoped
+public class BookingBot {
+
+    @SessionPayload
+    public record BookingData(String date, Integer guests) {}
+
+    @TelegramCommand(value = "/prenota", description = "Avvia prenotazione")
+    public String start(ConversationContext ctx) {
+        ctx.transitionTo("WAITING_DATE", new BookingData(null, null));
+        return "Per quale data vuoi prenotare? (es. 2026-12-25)";
+    }
+
+    @OnState("WAITING_DATE")
+    @OnMessage(type = MessageType.TEXT)
+    public SendMessage date(Message msg, ConversationContext ctx) {
+        String date = msg.text().trim();
+        ctx.transitionTo("WAITING_GUESTS", new BookingData(date, null));
+        return SendMessage.builder()
+                .chatId(msg.chat().id())
+                .text("Data: " + date + ". Quanti ospiti sarete?")
+                .replyMarkup(InlineKeyboard.of("2 persone", "guests_2", "4 persone", "guests_4"))
+                .build();
+    }
+
+    @OnState("WAITING_GUESTS")
+    @OnCallbackQuery("guests_*")
+    public String confirm(@CallbackParam String num, ConversationContext ctx, BookingData data) {
+        ctx.complete();
+        return "Prenotazione confermata per " + num + " ospiti il " + data.date() + "!";
+    }
+
+    @OnStateMismatch("WAITING_DATE")
+    public String badDate() {
+        return "Invia una data in formato testuale, es. 2026-12-25.";
+    }
+}
+----
+
+The payload type (`BookingData`) can be declared as a handler parameter; `@SessionPayload` registers it for reflection so it works in native mode.
+
+== Routing rules in an active state
+
+1. Commands marked `interruptsState = true` are handled with absolute precedence, even mid-conversation.
+2. Commands bound to the current state (`@OnState` + `@TelegramCommand`) are handled next.
+3. State handlers (`@OnState` + `@OnMessage` / `@OnCallbackQuery`) for the current state.
+4. `@OnStateMismatch` for the current state, then the global (valueless) one.
+5. Anything else is ignored.
+
+The last rule matters: while a conversation is active, stateless handlers do not run. Add an `interruptsState = true` command so the user can always escape. The annotation only gives the command precedence; call `ctx.complete()` yourself to end the conversation.
+
+[source,java]
+----
+@TelegramCommand(value = "/annulla", interruptsState = true)
+public String cancel(ConversationContext ctx) {
+    if (ctx.currentState().isEmpty()) {
+        return "Nessuna operazione in corso.";
+    }
+    ctx.complete();
+    return "Operazione annullata.";
+}
+----
+
+State handlers do not change the state on their own: call `transitionTo(...)` or `complete()` explicitly. An `@OnStateMismatch` handler leaves the state untouched, so the user can retry.
+
+== Session storage
+
+[cols="1,2"]
+|===
+|`quarkus.telegram.session.store` |Behavior
+
+|`memory` (default) |`InMemorySessionStore`, per-instance, with periodic eviction of expired sessions
+|`redis` |`RedisSessionStore`, shared across instances, uses `quarkus-redis-client` with an atomic distributed lock per session key
+|===
+
+[source,properties]
+----
+quarkus.telegram.session.store=redis
+quarkus.redis.hosts=redis://localhost:6379
+quarkus.telegram.session.ttl=15m
+----
+
+`quarkus.telegram.session.ttl` (default `15m`) expires inactive sessions in both stores. `session.store` is a build-time property, so changing it requires a rebuild.
+
+== Redis and DevServices
+
+The Redis store needs the `quarkus-redis-client` extension in the application; the extension declares it as an optional dependency, so it is not pulled in automatically.
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.quarkus</groupId>
+    <artifactId>quarkus-redis-client</artifactId>
+</dependency>
+----
+
+In production point the client at the server:
+
+[source,properties]
+----
+quarkus.telegram.session.store=redis
+quarkus.redis.hosts=redis://redis.internal:6379
+----
+
+In dev and test mode DevServices starts a throwaway Redis container instead. It is enabled by default (`quarkus.redis.devservices.enabled=true`) and only kicks in when no `quarkus.redis.hosts` is configured. The container is stopped when the application shuts down, so sessions do not survive a restart in this mode.
+
+With Podman, DevServices needs the socket Testcontainers should talk to. Rootless Podman exposes it at `/run/user/<uid>/podman/podman.sock`, which goes in `~/.testcontainers.properties`:
+
+[source,properties]
+----
+docker.host=unix:///run/user/1000/podman/podman.sock
+----
+
+Without that entry DevServices fails at startup with a connection error even though `podman ps` works.
+
+The project's own suite keeps DevServices off by default and enables it only for `TelegramRedisDevServicesTest`, which uses a test profile:
+
+[source,java]
+----
+public class RedisTestProfile implements QuarkusTestProfile {
+
+    @Override
+    public Map<String, String> getConfigOverrides() {
+        return Map.of(
+                "quarkus.redis.devservices.enabled", "true",
+                "quarkus.redis.devservices.image-name", "docker.io/library/redis:7-alpine",
+                "quarkus.telegram.session.store", "redis");
+    }
+}
+----
+
+Apply the same pattern in your own tests: the profile carries `session.store=redis`, the container starts, and the assertions can read the persisted snapshot straight from Redis.
+
+[source,bash]
+----
+mvn test -pl integration-tests -Dtest=TelegramRedisDevServicesTest
+----

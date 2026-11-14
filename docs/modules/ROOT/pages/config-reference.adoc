@@ -2,4 +2,29 @@
 
 include::./includes/attributes.adoc[]
 
+Summary of every property the extension reads. The generated tables below this summary list the same keys with their full descriptions and are regenerated from the config classes at build time.
+
+[cols="3,1,1,4"]
+|===
+|Property |Phase |Default |Description
+
+|`quarkus.telegram.token` |runtime |none |Token from @BotFather. Without it no transport starts.
+|`quarkus.telegram.bot-username` |runtime |none |Username without `@`; commands addressed to another bot (`/start@OtherBot`) are ignored.
+|`quarkus.telegram.mode` |runtime |`AUTO` |`AUTO` (polling in dev/test, webhook otherwise), `POLLING` or `WEBHOOK`.
+|`quarkus.telegram.client.base-url` |runtime |`https://api.telegram.org` |Base URL of the Bot API server, e.g. a local one.
+|`quarkus.telegram.client.upload-timeout` |runtime |`60s` |Timeout for multipart uploads.
+|`quarkus.telegram.polling.enabled` |runtime |`true` |Whether long polling may start.
+|`quarkus.telegram.polling.timeout` |runtime |`30s` |Long polling timeout sent in `getUpdates`.
+|`quarkus.telegram.polling.limit` |runtime |`100` |Maximum updates per poll.
+|`quarkus.telegram.webhook.public-url` |runtime |none |Public HTTPS URL; the webhook is registered at `public-url + path`.
+|`quarkus.telegram.webhook.secret-token` |runtime |none |Expected value of the `X-Telegram-Bot-Api-Secret-Token` header.
+|`quarkus.telegram.webhook.require-secret-token` |runtime |`true` |Rejects requests (and fails production startup) when no secret token is configured.
+|`quarkus.telegram.webhook.auto-register` |runtime |`true` |Calls `setWebhook` on startup when `public-url` is set.
+|`quarkus.telegram.session.ttl` |runtime |`15m` |Expiry for inactive conversations.
+|`quarkus.telegram.security.admin-ids` |runtime |none |Comma-separated Telegram user IDs that get the `admin` role.
+|`quarkus.telegram.webhook.enabled` |build time |`true` |Whether the webhook route is mounted.
+|`quarkus.telegram.webhook.path` |build time |`/telegram/webhook` |Path of the webhook route.
+|`quarkus.telegram.session.store` |build time |`memory` |`memory` or `redis`; see xref:conversations.adoc#redis-and-devservices[Redis and DevServices].
+|===
+
 include::includes/quarkus-telegram-bot.adoc[leveloffset=+1, opts=optional]

@@ -1,0 +1,88 @@
+= Transports & Configuration
+
+include::./includes/attributes.adoc[]
+
+== Transport mode
+
+[source,properties]
+----
+quarkus.telegram.mode=AUTO
+----
+
+[cols="1,2"]
+|===
+|Mode |Behavior
+
+|`AUTO` (default) |Long Polling in dev and test mode, Webhook in production
+|`POLLING` |Long Polling in every mode, e.g. on a host without public HTTPS
+|`WEBHOOK` |Webhook endpoint only
+|===
+
+Without `quarkus.telegram.token` no transport starts; the application boots normally.
+
+== Long Polling
+
+[source,properties]
+----
+quarkus.telegram.mode=POLLING
+quarkus.telegram.polling.enabled=true
+quarkus.telegram.polling.timeout=30s
+quarkus.telegram.polling.limit=100
+----
+
+Polling deletes any registered webhook before the first `getUpdates` call, so leftovers from a previous deployment do not block it.
+
+== Webhook
+
+[source,properties]
+----
+quarkus.telegram.mode=WEBHOOK
+quarkus.telegram.webhook.public-url=https://bot.example.com
+quarkus.telegram.webhook.path=/telegram/webhook
+quarkus.telegram.webhook.secret-token=<random-secret>
+----
+
+* The endpoint is mounted at `webhook.path` (default `/telegram/webhook`, build-time property).
+* With `webhook.auto-register=true` (default) and `public-url` set, `setWebhook` is called at startup with `publicUrl + path`.
+* With `webhook.secret-token` set, incoming requests must carry the `X-Telegram-Bot-Api-Secret-Token` header. Requests with a wrong or missing token are rejected.
+* With `webhook.require-secret-token=true` (default), startup fails in production when the mode resolves to webhook and no secret token is configured, and incoming requests are answered with `403` because no token can be verified. Set it to `false` only when an upstream proxy already authenticates requests.
+* `quarkus.telegram.webhook.enabled=false` prevents the route from being mounted at all (build-time property).
+
+== Client
+
+[source,properties]
+----
+quarkus.telegram.client.base-url=https://api.telegram.org
+quarkus.telegram.client.upload-timeout=60s
+----
+
+`base-url` allows pointing at a local Bot API server. `upload-timeout` bounds how long a multipart upload may take.
+
+== Sending files
+
+`InputFile` is a sealed interface with four variants: `FileId` (re-upload an existing file), `Url` (Telegram downloads it), `BinaryPath` (streamed from disk) and `BinaryBytes` (in-memory, for small payloads).
+
+[source,java]
+----
+@Inject
+TelegramBotClient bot;
+
+@TelegramCommand("/foto")
+public Uni<Message> foto(Chat chat) {
+    return bot.sendPhoto(chat.id(),
+            InputFile.fromPath(Path.of("/tmp/chart.png")),
+            "Andamento mensile");
+}
+
+@TelegramCommand("/report")
+public Uni<Message> report(Chat chat) {
+    return bot.sendDocument(chat.id(),
+            InputFile.fromBytes(pdfBytes, "report.pdf", "application/pdf"));
+}
+----
+
+Available methods: `sendPhoto`, `sendDocument`, `sendAudio`, `sendVideo`, `sendVoice`, `sendAnimation`, `sendMediaGroup`. A `BinaryPath` is streamed from disk by the HTTP client and `BinaryBytes` sends an in-memory buffer, both under `upload-timeout`; `FileId` and `Url` send a short JSON request with the default client timeout.
+
+== Configuration
+
+All keys with defaults are listed in xref:config-reference.adoc[Configuration Reference], including the ones fixed at build time (`webhook.enabled`, `webhook.path`, `session.store`).

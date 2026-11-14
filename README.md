@@ -3,24 +3,23 @@
 [![Version](https://img.shields.io/maven-central/v/io.quarkiverse.telegram/quarkus-telegram-bot?logo=apache-maven&style=flat-square)](https://central.sonatype.com/artifact/io.quarkiverse.telegram/quarkus-telegram-bot-parent)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-A high-performance, developer-friendly Quarkus extension for building Telegram bots using declarative annotations, reactive Mutiny APIs, conversational finite state machines (FSM), and automated Webhook or Long Polling transports.
-
----
+Quarkus extension for Telegram bots: CDI annotations for handlers, Mutiny for async calls, the generated Bot API 8.x models, and webhook or long polling transport.
 
 ## Features
 
-- **Declarative Bot Endpoints**: Route updates with `@TelegramCommand`, `@OnCallbackQuery`, `@OnMessage`, and `@OnStateMismatch`.
-- **Conversational Finite State Machine (FSM)**: Maintain persistent multi-step conversations (`ConversationContext`) backed by in-memory storage or Redis.
-- **Dual Transports**: Seamless automatic switching between **Long Polling** (dev/test) and **Webhook** (production).
-- **Strongly-typed 8.x Models**: Full Telegram Bot API 8.x specification coverage with immutable records and fluent builders.
-- **Inline Keyboards & In-Place Pagination**: Built-in support for `EditMessageText` and automated dismissal of callback query loading spinners.
-- **Multipart Uploads**: Send photos, documents, audio, and media groups with reactive backpressure and configurable upload timeouts.
+- Handlers declared with `@TelegramCommand`, `@OnCallbackQuery`, `@OnMessage`, `@OnInlineQuery`, `@OnState`, `@OnStateMismatch`, `@OnChosenInlineResult`, `@OnError`.
+- Multi-step conversations through `ConversationContext` (`transitionTo`, `complete`), stored in memory or Redis.
+- Automatic transport: long polling in dev and test, webhook in production, with optional secret token validation.
+- 230+ Java 21 records and sealed interfaces covering the Bot API, plus `InlineKeyboard` helpers.
+- Streamed uploads of photos, documents, audio and media groups through `InputFile.BinaryPath` and `InputFile.BinaryBytes`.
+- WireMock-based `ConversationSimulator` for testing bot flows without Telegram.
 
----
+## Requirements
+
+- Java 21
+- Quarkus 3.40.x
 
 ## Installation
-
-Add the extension dependency to your Quarkus project:
 
 ```xml
 <dependency>
@@ -30,26 +29,22 @@ Add the extension dependency to your Quarkus project:
 </dependency>
 ```
 
----
+## Quick start
 
-## Quick Start
-
-### 1. Configuration
-
-Add your bot credentials to `application.properties`:
+### 1. Configure the bot
 
 ```properties
-# Bot token from @BotFather
+# Token from @BotFather
 quarkus.telegram.token=123456789:ABCdefGHIjklMNOpqrSTUvwxYZ
 
-# Optional: Bot username for group chat command filtering
+# Optional: filters commands addressed to this bot in group chats ("/start@MyAwesomeBot")
 quarkus.telegram.bot-username=MyAwesomeBot
 
-# Transport mode: AUTO (default: POLLING in dev/test, WEBHOOK in prod)
+# AUTO: POLLING in dev/test, WEBHOOK in prod. Can be forced to POLLING or WEBHOOK.
 quarkus.telegram.mode=AUTO
 ```
 
-### 2. Create Your Bot
+### 2. Write a handler
 
 ```java
 package com.example;
@@ -58,10 +53,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 import io.quarkiverse.telegram.bot.runtime.api.CallbackParam;
 import io.quarkiverse.telegram.bot.runtime.api.OnCallbackQuery;
+import io.quarkiverse.telegram.bot.runtime.api.OnError;
 import io.quarkiverse.telegram.bot.runtime.api.TelegramCommand;
+import io.quarkiverse.telegram.bot.runtime.model.Chat;
 import io.quarkiverse.telegram.bot.runtime.model.EditMessageText;
 import io.quarkiverse.telegram.bot.runtime.model.InlineKeyboard;
-import io.quarkiverse.telegram.bot.runtime.model.Message;
 import io.quarkiverse.telegram.bot.runtime.model.SendMessage;
 import io.quarkiverse.telegram.bot.runtime.model.User;
 
@@ -69,31 +65,22 @@ import io.quarkiverse.telegram.bot.runtime.model.User;
 public class GreetingBot {
 
     @TelegramCommand(value = "/start", description = "Avvia il bot")
-    public SendMessage start(User user) {
+    public SendMessage start(User user, Chat chat) {
         return SendMessage.builder()
+                .chatId(chat.id())
                 .text("Benvenuto, " + user.firstName() + "! Vuoi vedere il catalogo?")
                 .replyMarkup(InlineKeyboard.of("Catalogo 📚", "catalog_page_1"))
                 .build();
     }
 
-    @OnCallbackQuery("catalog_page_{page}")
+    // EditMessageText on a callback fills chatId and messageId from the clicked message.
+    @OnCallbackQuery("catalog_page_*")
     public EditMessageText paginate(@CallbackParam String page) {
+        int next = Integer.parseInt(page) + 1;
         return EditMessageText.builder()
                 .text("Catalogo - Pagina " + page)
-                .replyMarkup(InlineKeyboard.of("Pagina successiva ➡️", "catalog_page_2"))
+                .replyMarkup(InlineKeyboard.of("Pagina successiva ➡️", "catalog_page_" + next))
                 .build();
-    }
-
-    @OnInlineQuery("search_*")
-    public List<InlineQueryResult> search(InlineQuery query, String queryText) {
-        return List.of(
-            InlineQueryResultArticle.builder()
-                .id("1")
-                .title("Cerca: " + queryText)
-                .type("article")
-                .inputMessageContent(new InputTextMessageContent("Risultato per: " + queryText, null, null, null))
-                .build()
-        );
     }
 
     @OnError(IllegalArgumentException.class)
@@ -103,20 +90,72 @@ public class GreetingBot {
 }
 ```
 
----
+Sending is automatic: return a model (`SendMessage`, `EditMessageText`, `DeleteMessage`, `AnswerCallbackQuery`, …), plain `String` for a text reply, or `Uni<T>` for async handlers. `SendMessage` needs an explicit `chatId(chat.id())`; returning `String` does not.
 
-## Build & Test
+### 3. Run
 
 ```bash
-# Compile and test locally
-mvn clean test
-
-# Fast compile skipping checks
-mvn compile -Dno-format
+mvn quarkus:dev
 ```
 
----
+With `AUTO` mode in dev, the bot starts long polling, so no public URL is needed. For webhooks set:
+
+```properties
+quarkus.telegram.mode=WEBHOOK
+quarkus.telegram.webhook.public-url=https://bot.example.com
+quarkus.telegram.webhook.secret-token=<random-secret>
+```
+
+### Redis-backed sessions
+
+```properties
+quarkus.telegram.session.store=redis
+quarkus.redis.hosts=redis://localhost:6379
+```
+
+Default store is in-memory; sessions expire after `quarkus.telegram.session.ttl` (default `15m`). The Redis store needs the `quarkus-redis-client` extension. In dev and test mode DevServices can start Redis for you; see [Conversations & FSM](docs/modules/ROOT/pages/conversations.adoc).
 
 ## Documentation
 
-Comprehensive guides, conversation FSM examples, Redis persistence configuration, and reference docs are available in [docs/modules/ROOT/pages/index.adoc](docs/modules/ROOT/pages/index.adoc).
+- Full guide and FSM examples: [docs/modules/ROOT/pages/index.adoc](docs/modules/ROOT/pages/index.adoc)
+- Every configuration key: [docs/modules/ROOT/pages/config-reference.adoc](docs/modules/ROOT/pages/config-reference.adoc)
+- Module-by-module walkthrough: [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)
+- Architecture notes: [architecture.md](architecture.md)
+
+## Building from source
+
+```bash
+# Full reactor build with tests
+mvn clean test
+
+# Install snapshots to ~/.m2 without tests
+mvn clean install -DskipTests
+
+# Fast compile, skip formatting
+mvn compile -Dno-format
+```
+
+Modules: `codegen` (model generator), `runtime` (extension runtime), `deployment` (build steps), `test-framework` (development testing harness), `docs` (Antora site), `integration-tests` (WireMock suite).
+
+`integration-tests` consumes the other modules from `~/.m2`. After changing `runtime`, `deployment` or `test-framework`, install them first:
+
+```bash
+mvn install -DskipTests -pl runtime,deployment,test-framework
+mvn test -pl integration-tests -Dtest=TelegramFsmTest
+```
+
+## Testing your bot
+
+`quarkus-telegram-bot-test-framework` mocks the Telegram API and simulates user interactions. Inject `TelegramBotTestSupport` into a `@QuarkusTest`:
+
+```java
+botTester.user(12345L)
+        .sendsCommand("/start")
+        .assertBotReplied("Benvenuto")
+        .clicksButton("catalog_page_1")
+        .assertMessageEdited();
+```
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE).

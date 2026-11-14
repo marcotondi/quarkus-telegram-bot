@@ -7,6 +7,69 @@ h|[.header-title]##Configuration property##
 h|Type
 h|Default
 
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-webhook-enabled]] [.property-path]##link:#quarkus-telegram-bot_quarkus-webhook-enabled[`+++quarkus.webhook.enabled+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.webhook.enabled+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Whether the webhook HTTP endpoint is enabled and mounted on Vert.x.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_WEBHOOK_ENABLED+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_WEBHOOK_ENABLED+++`
+endif::add-copy-button-to-env-var[]
+--
+|boolean
+|`+++true+++`
+
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-webhook-path]] [.property-path]##link:#quarkus-telegram-bot_quarkus-webhook-path[`+++quarkus.webhook.path+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.webhook.path+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+Path where the webhook endpoint is mounted on the Vert.x HTTP server.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_WEBHOOK_PATH+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_WEBHOOK_PATH+++`
+endif::add-copy-button-to-env-var[]
+--
+|string
+|`+++/telegram/webhook+++`
+
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-session-store]] [.property-path]##link:#quarkus-telegram-bot_quarkus-session-store[`+++quarkus.session.store+++`]##
+ifdef::add-copy-button-to-config-props[]
+config_property_copy_button:+++quarkus.session.store+++[]
+endif::add-copy-button-to-config-props[]
+
+
+[.description]
+--
+State storage backend: memory or redis.
+
+
+ifdef::add-copy-button-to-env-var[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_SESSION_STORE+++[]
+endif::add-copy-button-to-env-var[]
+ifndef::add-copy-button-to-env-var[]
+Environment variable: `+++QUARKUS_SESSION_STORE+++`
+endif::add-copy-button-to-env-var[]
+--
+|string
+|`+++memory+++`
+
 a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-token]] [.property-path]##link:#quarkus-telegram-bot_quarkus-token[`+++quarkus.token+++`]##
 ifdef::add-copy-button-to-config-props[]
 config_property_copy_button:+++quarkus.token+++[]
@@ -280,24 +343,26 @@ endif::add-copy-button-to-env-var[]
 |link:https://docs.oracle.com/en/java/javase/17/docs/api/java.base/java/time/Duration.html[Duration] link:#duration-note-anchor-quarkus-telegram-bot_quarkus[icon:question-circle[title=More information about the Duration format]]
 |`+++15M+++`
 
-a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-security]] [.property-path]##link:#quarkus-telegram-bot_quarkus-security[`+++quarkus.security+++`]##
+a|icon:lock[title=Fixed at build time] [[quarkus-telegram-bot_quarkus-security-admin-ids]] [.property-path]##link:#quarkus-telegram-bot_quarkus-security-admin-ids[`+++quarkus.security.admin-ids+++`]##
 ifdef::add-copy-button-to-config-props[]
-config_property_copy_button:+++quarkus.security+++[]
+config_property_copy_button:+++quarkus.security.admin-ids+++[]
 endif::add-copy-button-to-config-props[]
 
 
 [.description]
 --
+Comma-separated list of Telegram user IDs considered bot administrators.
+
 
 ifdef::add-copy-button-to-env-var[]
-Environment variable: env_var_with_copy_button:+++QUARKUS_SECURITY+++[]
+Environment variable: env_var_with_copy_button:+++QUARKUS_SECURITY_ADMIN_IDS+++[]
 endif::add-copy-button-to-env-var[]
 ifndef::add-copy-button-to-env-var[]
-Environment variable: `+++QUARKUS_SECURITY+++`
+Environment variable: `+++QUARKUS_SECURITY_ADMIN_IDS+++`
 endif::add-copy-button-to-env-var[]
 --
-|SecurityConfig
-|required icon:exclamation-circle[title=Configuration property is required]
+|list of long
+|
 
 |===
 

@@ -1,2 +1,7 @@
 * xref:index.adoc[Getting started]
+* xref:handlers.adoc[Handlers & Routing]
+* xref:conversations.adoc[Conversations & FSM]
+* xref:security.adoc[Security & Authorization]
+* xref:transports.adoc[Transports & Configuration]
+* xref:testing.adoc[Testing Bots]
 * xref:config-reference.adoc[Configuration Reference]

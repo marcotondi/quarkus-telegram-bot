@@ -1,0 +1,85 @@
+= Security & Authorization
+
+include::./includes/attributes.adoc[]
+
+Restrictions are declared on the handler method or on the whole bean. When both carry the same annotation, the method-level one wins.
+
+== Administrators
+
+[source,properties]
+----
+quarkus.telegram.security.admin-ids=12345678,98765432
+----
+
+Users in this list get the `admin` role. Mark handlers with `@BotAdmin`:
+
+[source,java]
+----
+@BotAdmin
+@TelegramCommand(value = "/stats", description = "Statistiche bot")
+public String stats() {
+    return "Utenti attivi: 42";
+}
+----
+
+== Roles and allowed users
+
+`@SecuredBot` accepts roles, explicit users, or both. A sender passes if any condition matches (OR logic).
+
+[source,java]
+----
+@SecuredBot(roles = { "moderator", "admin" })
+@TelegramCommand("/ban")
+public String ban(Message msg) { ... }
+
+@SecuredBot(allowedUsers = { "12345678", "john", "@john" })
+@TelegramCommand("/beta")
+public String beta() { ... }
+----
+
+`allowedUsers` accepts numeric user IDs, usernames, and usernames prefixed with `@`, case-insensitive.
+
+== Custom roles
+
+Provide a CDI bean implementing `TelegramRoleResolver` to supply roles from a database or permission system:
+
+[source,java]
+----
+@ApplicationScoped
+public class DatabaseRoleResolver implements TelegramRoleResolver {
+
+    @Override
+    public Set<String> getRoles(User user, Chat chat) {
+        return userRepository.rolesOf(user.id());
+    }
+}
+----
+
+Roles returned here are added to the `admin` role derived from `admin-ids`, so a resolver can also grant admin rights.
+
+== Silent denial
+
+Both `@BotAdmin` and `@SecuredBot` accept `silent = true`. Default (`false`) throws `TelegramSecurityException`, which an `@OnError` handler can turn into a reply. With `silent = true` the update is dropped without any reply (callback spinners are still answered).
+
+[source,java]
+----
+@OnError(TelegramSecurityException.class)
+public String denied(TelegramSecurityException ex) {
+    return "Non hai i permessi per questo comando.";
+}
+----
+
+`@OnError` handlers themselves are never subject to security checks.
+
+== Chat type filter
+
+`@ChatType` limits a handler or a bean to specific chat kinds:
+
+[source,java]
+----
+@ChatType(ChatType.Type.PRIVATE)
+@TelegramCommand(value = "/start", description = "Avvia il bot")
+public String start() { ... }
+----
+
+Allowed values: `PRIVATE`, `GROUP`, `SUPERGROUP`, `CHANNEL`. Without the annotation, handlers accept every chat type.

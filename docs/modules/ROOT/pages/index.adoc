@@ -2,20 +2,23 @@
 
 include::./includes/attributes.adoc[]
 
-Quarkus Telegram Bot is a native, reactive, high-performance extension for building Telegram Bots on top of Quarkus, Vert.x, Mutiny, and Jackson.
+A Quarkus extension for Telegram bots: CDI annotations, Mutiny, and generated Bot API 8.x models. The transport (webhook or long polling) is picked automatically.
 
 == Features
 
-* **Complete Telegram Bot API 8.x Model**: Over 230 Java 21 records and sealed interfaces generated from OpenAPI schemas.
-* **Declarative CDI Routing**: Handle incoming updates with `@TelegramCommand`, `@OnCallbackQuery`, `@OnMessage`, and `@OnState`.
-* **Zero-Reflection Multipart Streaming**: Upload files (`sendPhoto`, `sendDocument`, `sendAudio`, etc.) seamlessly with `BinaryBytes` and `BinaryPath` via Vert.x streaming.
-* **Conversational FSM**: Stateful conversation flows (`transitionTo`, `complete`, `@OnStateMismatch`, `interruptsState = true`).
-* **Pluggable Session Storage**: Built-in support for `InMemorySessionStore` (default) and `RedisSessionStore` (reactive via `quarkus-redis-client`).
-* **Flexible Transport Modes**: Automatic switching between Polling (ideal for local dev) and Webhook (high concurrency on Vert.x HTTP server).
+* Handlers declared with `@TelegramCommand`, `@OnMessage`, `@OnCallbackQuery`, `@OnInlineQuery`, `@OnChosenInlineResult`, `@OnState`, `@OnStateMismatch`, `@OnError`. Details in xref:handlers.adoc[Handlers & Routing].
+* Multi-step conversations with `ConversationContext`, stored in memory or Redis. Details in xref:conversations.adoc[Conversations & FSM].
+* Per-handler restrictions through `@SecuredBot`, `@BotAdmin` and `@ChatType`. Details in xref:security.adoc[Security & Authorization].
+* 230+ Java 21 records and sealed interfaces covering the Bot API, plus `InlineKeyboard` builders.
+* Uploads of photos, documents, audio and media groups through `InputFile.BinaryPath` and `InputFile.BinaryBytes`.
+* WireMock-backed `ConversationSimulator` for testing bot flows. Details in xref:testing.adoc[Testing Bots].
+
+== Requirements
+
+* Java 21
+* Quarkus 3.40.x
 
 == Installation
-
-To use this extension, add the `io.quarkiverse.telegram:quarkus-telegram-bot` dependency to your build file:
 
 [source,xml,subs=attributes+]
 ----
@@ -28,117 +31,65 @@ To use this extension, add the `io.quarkiverse.telegram:quarkus-telegram-bot` de
 
 == Configuration
 
-Configure your bot token and transport mode in `application.properties`:
+Minimal `application.properties`:
 
 [source,properties]
 ----
-quarkus.telegram.token=123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ
-quarkus.telegram.mode=auto
-quarkus.telegram.session.store=in-memory
-quarkus.telegram.session.ttl=15m
+quarkus.telegram.token=123456789:ABCdefGhIJklmNoPQRsTUVwxyZ
+quarkus.telegram.mode=AUTO
 ----
 
-=== Using Redis for Session Storage
+`AUTO` polls Telegram in dev and test mode, and uses the webhook in production. Every key with its default is in xref:config-reference.adoc[Configuration Reference]; transport behavior is described in xref:transports.adoc[Transports & Configuration].
 
-To use Redis for distributed, shared session state:
-
-[source,properties]
-----
-quarkus.telegram.session.store=redis
-quarkus.redis.hosts=redis://localhost:6379
-----
-
-== Conversational Flow Example
+== First handler
 
 [source,java]
 ----
+package com.example;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
+import io.quarkiverse.telegram.bot.runtime.api.TelegramCommand;
+import io.quarkiverse.telegram.bot.runtime.model.Chat;
+import io.quarkiverse.telegram.bot.runtime.model.SendMessage;
+import io.quarkiverse.telegram.bot.runtime.model.User;
+
 @ApplicationScoped
-public class BookingBot {
+public class GreetingBot {
 
-    @SessionPayload
-    public record BookingData(String date, Integer guests) {}
-
-    @TelegramCommand(value = "/prenota", description = "Avvia prenotazione")
-    public String startBooking(ConversationContext ctx) {
-        ctx.transitionTo("WAITING_DATE", new BookingData(null, null));
-        return "Per quale data vuoi prenotare? (es. 2026-12-25)";
-    }
-
-    @OnState("WAITING_DATE")
-    @OnMessage(type = MessageType.TEXT)
-    public SendMessage receiveDate(Message msg, ConversationContext ctx) {
-        String date = msg.text().trim();
-        ctx.transitionTo("WAITING_GUESTS", new BookingData(date, null));
-
-        return SendMessage.builder()
-                .chatId(msg.chat().id())
-                .text("Data: " + date + ". Quanti ospiti sarete?")
-                .replyMarkup(InlineKeyboard.of("2 persone", "guests_2", "4 persone", "guests_4"))
-                .build();
-    }
-
-    @OnState("WAITING_DATE")
-    @OnStateMismatch("WAITING_DATE")
-    public String dateMismatch() {
-        return "Formato data non valido! Invia una data di testo valida.";
-    }
-
-    @OnState("WAITING_GUESTS")
-    @OnCallbackQuery("guests_*")
-    public String confirmGuests(CallbackQuery query, @CallbackParam String num, ConversationContext ctx, BookingData data) {
-        ctx.complete();
-        return "Prenotazione confermata per " + num + " ospiti il " + data.date() + "!";
-    }
-
-    @TelegramCommand(value = "/annulla", interruptsState = true)
-    public String cancel(ConversationContext ctx) {
-        if (ctx.currentState().isEmpty()) {
-            return "Nessuna operazione in corso.";
-        }
-        ctx.complete();
-        return "Operazione annullata con successo.";
-    }
-}
-----
-
-== Inline Keyboard Pagination & Callbacks
-
-To paginate or update messages in-place without producing duplicate messages, return `EditMessageText` from `@OnCallbackQuery`.
-The extension automatically invokes `answerCallbackQuery` in the background to dismiss the Telegram client loading spinner:
-
-[source,java]
-----
-@ApplicationScoped
-public class CatalogBot {
-
-    @TelegramCommand("/catalogo")
-    public SendMessage showCatalog(Chat chat) {
+    @TelegramCommand(value = "/start", description = "Avvia il bot")
+    public SendMessage start(User user, Chat chat) {
         return SendMessage.builder()
                 .chatId(chat.id())
-                .text("Catalogo - Pagina 1")
-                .replyMarkup(InlineKeyboard.of("Avanti ➡️", "page_2"))
-                .build();
-    }
-
-    @OnCallbackQuery("page_*")
-    public EditMessageText onPageChange(@CallbackParam String page) {
-        int nextPage = Integer.parseInt(page) + 1;
-        return EditMessageText.builder()
-                .text("Catalogo - Pagina " + page)
-                .replyMarkup(InlineKeyboard.of("Avanti ➡️", "page_" + nextPage))
-                .build();
-    }
-
-    @OnCallbackQuery("info_*")
-    public AnswerCallbackQuery onInfo(@CallbackParam String item) {
-        return AnswerCallbackQuery.builder()
-                .text("Dettagli su: " + item)
-                .showAlert(true)
+                .text("Benvenuto, " + user.firstName() + "!")
                 .build();
     }
 }
 ----
 
-== Configuration Reference
+Returning a `String` sends a plain text reply to the current chat and needs no `chatId`:
 
-include::includes/quarkus-telegram-bot.adoc[leveloffset=+1,opts=optional]
+[source,java]
+----
+@TelegramCommand("/ping")
+public String ping() {
+    return "pong";
+}
+----
+
+== Run
+
+[source,bash]
+----
+mvn quarkus:dev
+----
+
+Command descriptions declared on `@TelegramCommand` are registered with Telegram through `setMyCommands` at startup.
+
+== Next steps
+
+* xref:handlers.adoc[Handlers & Routing]: parameter injection, return types, callbacks, inline queries, error handlers.
+* xref:conversations.adoc[Conversations & FSM]: states, payloads, Redis sessions.
+* xref:security.adoc[Security & Authorization]: roles, admins, chat type filters.
+* xref:transports.adoc[Transports & Configuration]: polling, webhook, uploads.
+* xref:testing.adoc[Testing Bots]: `ConversationSimulator`.

@@ -1,0 +1,92 @@
+= Testing Bots
+
+include::./includes/attributes.adoc[]
+
+`quarkus-telegram-bot-test-framework` starts a WireMock server that impersonates the Telegram Bot API, points the extension at it, and offers a fluent simulator for user interactions.
+
+[source,xml]
+----
+<dependency>
+    <groupId>io.quarkiverse.telegram</groupId>
+    <artifactId>quarkus-telegram-bot-test-framework</artifactId>
+    <version>{project-version}</version>
+    <scope>test</scope>
+</dependency>
+----
+
+== Test setup
+
+[source,java]
+----
+@QuarkusTest
+@QuarkusTestResource(TelegramBotTestResource.class)
+class GreetingBotTest {
+
+    @Inject
+    TelegramBotTestSupport botTester;
+
+    @Test
+    void startAndPaginate() {
+        botTester.user(12345L)
+                .sendsCommand("/start")
+                .assertBotReplied("Benvenuto")
+                .assertReplyMarkupContains("Catalogo")
+                .clicksButton("page_1")
+                .assertMessageEdited("Pagina 1");
+    }
+}
+----
+
+The test resource registers the calls the runtime makes on startup (`getMe`, `deleteWebhook`, `setWebhook`, `setMyCommands`) and the message, callback, inline query and media endpoints, each with a default success response.
+
+== Simulator API
+
+Actions, all chainable and scoped to the current simulated user:
+
+[cols="1,2"]
+|===
+|Method |Effect
+
+|`user(userId)` / `user(userId, chatId)` |Starts a conversation for a user (also `TelegramBotTestSupport.simulate(...)` as a static entry point)
+|`chat(chatId)` / `chat(chatId, "group"\|"supergroup"\|"channel"\|"private")` |Overrides the chat
+|`sendsCommand("/start")` / `sendsCommand("/start", "arg")` |Sends a message with the command text
+|`sendsMessage("hello")` |Sends a plain text message
+|`clicksButton("page_1")` / `clicksButton("page_1", messageId)` |Sends a callback query
+|`sendsInlineQuery("search_x")` / `sendsChosenInlineResult(id, query)` |Sends inline updates
+|`sendsUpdate(update)` / `sendsRawUpdate(json)` |Sends a handcrafted update
+|`withSecretToken(token)` / `withHeader(name, value)` |Adds webhook headers
+|`withTimeout(duration)` / `expectStatus(code)` |Tuning
+|===
+
+Assertions:
+
+[cols="1,2"]
+|===
+|Assertion |Checks
+
+|`assertBotReplied(text)` / `assertBotRepliedExact` / `assertBotRepliedMatching(Pattern)` / `assertBotRepliedWith(Consumer<SendMessage>)` |Outgoing `sendMessage`
+|`assertReplyMarkupContains(text)` / `assertInlineButton(text, callbackData)` |Keyboard content
+|`assertMessageEdited()` / `assertMessageEdited(text)` / `assertMessageEditedExact` / `assertMessageEditedWith(Consumer<EditMessageText>)` |Outgoing `editMessageText`
+|`assertCallbackAnswered()` / `assertCallbackAnswered(text)` |`answerCallbackQuery`
+|`assertInlineQueryAnswered()` / `assertInlineQueryAnswered(count)` |`answerInlineQuery`
+|`assertNoMessageSent()` / `assertNothingSent()` |No outgoing calls
+|`assertSent(RequestPatternBuilder)` |Custom WireMock request matcher
+|===
+
+== Verifying raw requests
+
+Access the server instance instead of the WireMock statics:
+
+[source,java]
+----
+@Inject
+TelegramBotTestSupport support;
+
+support.getWireMockServer()
+        .verify(postRequestedFor(urlMatching("/bot.*/sendMessage"))
+                .withRequestBody(containing("\"chat_id\":12345")));
+----
+
+Calling static `WireMock.verify(...)` targets port 8080 and fails with `HttpHostConnectException`; always go through the injected support or `TelegramBotTestResource.getWireMockServer()`.
+
+Assertions only inspect requests issued since the previous simulator action, so chained steps do not need a journal reset. Call `support.reset()` in `@BeforeEach` when a test's first assertion must ignore traffic left by an earlier test in the same class.
