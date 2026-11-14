@@ -93,3 +93,4 @@ Command descriptions declared on `@TelegramCommand` are registered with Telegram
 * xref:security.adoc[Security & Authorization]: roles, admins, chat type filters.
 * xref:transports.adoc[Transports & Configuration]: polling, webhook, uploads.
 * xref:testing.adoc[Testing Bots]: `ConversationSimulator`.
+* xref:observability.adoc[Health, Metrics & Validation]: readiness check, Micrometer metrics, build-time handler diagnostics.

@@ -1,0 +1,49 @@
+= Health, Metrics & Build-Time Validation
+
+include::./includes/attributes.adoc[]
+
+None of these integrations add a hard dependency: each is activated only when the corresponding Quarkus extension is on the classpath.
+
+== Readiness check
+
+Add `quarkus-smallrye-health` to the application and the extension registers a readiness check named `telegram-bot`. It reports the transport that was actually started:
+
+* `POLLING`: up while the polling loop is running and the last `getUpdates` call did not fail.
+* `WEBHOOK`: up once the webhook handler is active and `setWebhook` (when auto-registration is enabled) did not fail.
+* No token configured, or no transport resolved: down, with the reason in the `reason` data field.
+
+The check reads in-memory state only, so it is safe to call on every readiness probe. The JSON payload carries the transport name and, when down, the last transport error.
+
+== Micrometer metrics
+
+Add `quarkus-micrometer` (plus a registry, for example `quarkus-micrometer-registry-prometheus`) and every dispatch records:
+
+[cols="2,3"]
+|===
+|Metric |Description
+
+|`telegram.updates.received` |Counter, tagged with `type` (`message`, `callback_query`, `inline_query`, `chosen_inline_result`, `edited_message`, `channel_post`, `edited_channel_post`, `chat_member`, `chat_join_request`, `other`)
+|`telegram.updates.duration` |Timer of the whole dispatch, same `type` tag
+|`telegram.updates.errors` |Counter of failed dispatches, tagged with `type` and `exception`
+|===
+
+With the Prometheus registry they are exported as `telegram_updates_received_total`, `telegram_updates_duration_seconds` and `telegram_updates_errors_total` on `/q/metrics`.
+
+== Build-time validation
+
+`TelegramBotProcessor` fails the build instead of failing at runtime for:
+
+* handler methods that are `static`, `private` or `abstract`;
+* parameters outside the injectable set (`Update`, `Message`, `CallbackQuery`, `InlineQuery`, `ChosenInlineResult`, `User`, `Chat`, `TelegramBotClient`, `ConversationContext`, `String`, `@SessionPayload` payloads, `Throwable` only in `@OnError` and `@AfterUpdate`);
+* return types outside `void`, `String`, `SendMessage`, `EditMessageText`, `EditMessageReplyMarkup`, `DeleteMessage`, `SendChatAction`, `AnswerCallbackQuery`, `AnswerInlineQuery`, `InlineQueryResult`, `List<InlineQueryResult>` and `Uni<T>` of those (`boolean` is accepted on `@BeforeUpdate`);
+* two handlers for the same command and state whose `@ChatType` filters overlap.
+
+Example error:
+
+[source,text]
+----
+Duplicate Telegram command '/start' in com.example.BotA#start and com.example.BotB#start.
+Rename one handler or restrict them with @ChatType
+----
+
+Both checks run during augmentation, so a misconfigured bot never reaches Telegram.

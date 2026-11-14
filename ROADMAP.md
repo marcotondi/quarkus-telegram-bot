@@ -50,12 +50,12 @@ Fornire la console visuale di diagnostica per gli sviluppatori in modalità `qua
 
 Allineamento con i pattern ufficiali delle estensioni Quarkiverse:
 
-- [ ] **Health Check Opzionale ([SmallRye Health](https://quarkus.io/guides/smallrye-health))**:
+- [x] **Health Check Opzionale ([SmallRye Health](https://quarkus.io/guides/smallrye-health))**:
   - Fornitura di un `TelegramBotHealthCheck` (readiness) attivo condizionalmente se `quarkus-smallrye-health` è nel classpath.
   - Verifica che il thread di Polling sia operativo e privo di errori critici o che il Webhook sia attivo e configurato.
-- [ ] **Metriche Predefinite ([Micrometer](https://quarkus.io/guides/micrometer))**:
+- [x] **Metriche Predefinite ([Micrometer](https://quarkus.io/guides/micrometer))**:
   - Esposizione opzionale di metriche out-of-the-box (`telegram.updates.received`, `telegram.updates.duration`, `telegram.updates.errors`).
-- [ ] **Validazione a Build-Time (Fail-Fast)**:
+- [x] **Validazione a Build-Time (Fail-Fast)**:
   - Diagnostica statica in `TelegramBotProcessor` per intercettare a tempo di compilazione firme di metodi annotati non conformi o conflitti su comandi duplicati non filtrati da `@ChatType`.
 
 ---

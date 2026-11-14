@@ -121,6 +121,7 @@ Default store is in-memory; sessions expire after `quarkus.telegram.session.ttl`
 - Every configuration key: [docs/modules/ROOT/pages/config-reference.adoc](docs/modules/ROOT/pages/config-reference.adoc)
 - Module-by-module walkthrough: [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)
 - Architecture notes: [architecture.md](architecture.md)
+- Health check, metrics and build-time validation: [docs/modules/ROOT/pages/observability.adoc](docs/modules/ROOT/pages/observability.adoc)
 
 ## Building from source
 

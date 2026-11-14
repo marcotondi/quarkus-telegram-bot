@@ -11,6 +11,7 @@ import io.quarkiverse.telegram.bot.runtime.client.TelegramBotClient;
 import io.quarkiverse.telegram.bot.runtime.config.TelegramBotConfig;
 import io.quarkiverse.telegram.bot.runtime.dispatcher.HandlerDescriptor;
 import io.quarkiverse.telegram.bot.runtime.dispatcher.UpdateDispatcher;
+import io.quarkiverse.telegram.bot.runtime.metrics.TelegramBotMetrics;
 import io.quarkiverse.telegram.bot.runtime.model.BotCommand;
 import io.quarkiverse.telegram.bot.runtime.model.SetWebhookRequest;
 import io.quarkiverse.telegram.bot.runtime.session.SessionStore;
@@ -35,8 +36,10 @@ public class TelegramBotRecorder {
         SessionStore sessionStore = Arc.container().instance(SessionStore.class).get();
         InstanceHandle<TelegramRoleResolver> roleResolverHandle = Arc.container().instance(TelegramRoleResolver.class);
         TelegramRoleResolver roleResolver = roleResolverHandle.isAvailable() ? roleResolverHandle.get() : null;
+        InstanceHandle<TelegramBotMetrics> metricsHandle = Arc.container().instance(TelegramBotMetrics.class);
+        TelegramBotMetrics metrics = metricsHandle.isAvailable() ? metricsHandle.get() : null;
 
-        UpdateDispatcher dispatcher = new UpdateDispatcher(handlers, client, config, sessionStore, roleResolver);
+        UpdateDispatcher dispatcher = new UpdateDispatcher(handlers, client, config, sessionStore, roleResolver, metrics);
         return new RuntimeValue<>(dispatcher);
     }
 
@@ -44,16 +47,22 @@ public class TelegramBotRecorder {
             RuntimeValue<UpdateDispatcher> dispatcherVal,
             LaunchMode launchMode,
             List<BotCommand> commands,
-            String webhookPath) {
+            String webhookPath,
+            boolean webhookEnabled) {
         TelegramBotClient client = Arc.container().instance(TelegramBotClient.class).get();
         TelegramBotConfig config = Arc.container().instance(TelegramBotConfig.class).get();
         PollingRunner pollingRunner = Arc.container().instance(PollingRunner.class).get();
+        TelegramBotStatus status = Arc.container().instance(TelegramBotStatus.class).get();
 
         UpdateDispatcher dispatcher = dispatcherVal.getValue();
         pollingRunner.setDispatcher(dispatcher);
 
         if (config.token().isEmpty() || config.token().get().isBlank()) {
+            status.setTransport(TelegramBotStatus.Transport.NONE);
             return;
+        }
+        if (!webhookEnabled) {
+            status.setTransport(TelegramBotStatus.Transport.NONE);
         }
 
         // Register bot commands with Telegram if any @TelegramCommand annotations had descriptions
@@ -69,6 +78,7 @@ public class TelegramBotRecorder {
                 || (mode == TelegramBotConfig.TransportMode.AUTO && !launchMode.isDevOrTest());
 
         if (isWebhook) {
+            status.setTransport(TelegramBotStatus.Transport.WEBHOOK);
             // Check secret token requirement in production
             if (config.webhook().requireSecretToken() && config.webhook().secretToken().isEmpty()
                     && !launchMode.isDevOrTest()) {
@@ -84,11 +94,18 @@ public class TelegramBotRecorder {
                         config.webhook().secretToken().orElse(null));
                 client.setWebhook(req)
                         .subscribe().with(
-                                ok -> LOG.infof("Registered Telegram Webhook at %s", fullWebhookUrl),
-                                err -> LOG.errorf(err, "Failed to register Telegram Webhook at %s: %s", fullWebhookUrl,
-                                        err.getMessage()));
+                                ok -> {
+                                    status.clearError();
+                                    LOG.infof("Registered Telegram Webhook at %s", fullWebhookUrl);
+                                },
+                                err -> {
+                                    status.setLastError("webhook: " + err.getMessage());
+                                    LOG.errorf(err, "Failed to register Telegram Webhook at %s: %s", fullWebhookUrl,
+                                            err.getMessage());
+                                });
             }
         } else {
+            status.setTransport(TelegramBotStatus.Transport.POLLING);
             pollingRunner.startIfEnabled(launchMode);
         }
     }

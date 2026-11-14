@@ -21,6 +21,7 @@ import io.quarkiverse.telegram.bot.runtime.api.TelegramRoleResolver;
 import io.quarkiverse.telegram.bot.runtime.api.TelegramSecurityException;
 import io.quarkiverse.telegram.bot.runtime.client.TelegramBotClient;
 import io.quarkiverse.telegram.bot.runtime.config.TelegramBotConfig;
+import io.quarkiverse.telegram.bot.runtime.metrics.TelegramBotMetrics;
 import io.quarkiverse.telegram.bot.runtime.model.AnswerCallbackQuery;
 import io.quarkiverse.telegram.bot.runtime.model.AnswerInlineQuery;
 import io.quarkiverse.telegram.bot.runtime.model.CallbackQuery;
@@ -59,6 +60,7 @@ public class UpdateDispatcher {
     private final SessionStore sessionStore;
     private final TelegramRoleResolver roleResolver;
     private final RateLimiter rateLimiter;
+    private final TelegramBotMetrics metrics;
     private final Map<HandlerDescriptor, Method> methodCache = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<SessionKey, Uni<Void>> sessionLocks = new ConcurrentHashMap<>();
 
@@ -67,7 +69,7 @@ public class UpdateDispatcher {
             TelegramBotClient client,
             TelegramBotConfig config,
             SessionStore sessionStore) {
-        this(handlers, client, config, sessionStore, null);
+        this(handlers, client, config, sessionStore, null, null);
     }
 
     public UpdateDispatcher(
@@ -76,6 +78,16 @@ public class UpdateDispatcher {
             TelegramBotConfig config,
             SessionStore sessionStore,
             TelegramRoleResolver roleResolver) {
+        this(handlers, client, config, sessionStore, roleResolver, null);
+    }
+
+    public UpdateDispatcher(
+            List<HandlerDescriptor> handlers,
+            TelegramBotClient client,
+            TelegramBotConfig config,
+            SessionStore sessionStore,
+            TelegramRoleResolver roleResolver,
+            TelegramBotMetrics metrics) {
         this.client = client;
         this.config = config;
         this.sessionStore = sessionStore;
@@ -83,6 +95,7 @@ public class UpdateDispatcher {
         this.rateLimiter = config.rateLimit().enabled()
                 ? new RateLimiter(config.rateLimit().maxRequests(), config.rateLimit().window())
                 : null;
+        this.metrics = metrics;
 
         List<HandlerDescriptor> regular = new ArrayList<>();
         List<HandlerDescriptor> before = new ArrayList<>();
@@ -112,7 +125,50 @@ public class UpdateDispatcher {
         if (update == null) {
             return Uni.createFrom().voidItem();
         }
+        if (metrics == null) {
+            return dispatchInternal(update);
+        }
 
+        String type = updateType(update);
+        long startedAt = System.nanoTime();
+        metrics.updateReceived(type);
+        return dispatchInternal(update)
+                .onItemOrFailure().invoke((ignored, failure) -> metrics.updateCompleted(type,
+                        System.nanoTime() - startedAt, failure));
+    }
+
+    private static String updateType(Update update) {
+        if (update.callbackQuery() != null) {
+            return "callback_query";
+        }
+        if (update.inlineQuery() != null) {
+            return "inline_query";
+        }
+        if (update.chosenInlineResult() != null) {
+            return "chosen_inline_result";
+        }
+        if (update.message() != null) {
+            return "message";
+        }
+        if (update.editedMessage() != null) {
+            return "edited_message";
+        }
+        if (update.channelPost() != null) {
+            return "channel_post";
+        }
+        if (update.editedChannelPost() != null) {
+            return "edited_channel_post";
+        }
+        if (update.chatMember() != null || update.myChatMember() != null) {
+            return "chat_member";
+        }
+        if (update.chatJoinRequest() != null) {
+            return "chat_join_request";
+        }
+        return "other";
+    }
+
+    private Uni<Void> dispatchInternal(Update update) {
         if (rateLimiter != null) {
             Long key = rateLimitKey(update);
             if (key != null) {
@@ -123,7 +179,6 @@ public class UpdateDispatcher {
                 }
             }
         }
-
         SessionKey sessionKey = extractSessionKey(update);
         if (sessionKey == null) {
             AtomicReference<String> failingBeanClass = new AtomicReference<>();

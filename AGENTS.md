@@ -68,6 +68,11 @@
 * **Jandex ClassInfo vs Declared Annotations**:
   In Jandex, `ClassInfo.annotation(DotName)` recursively matches annotations found anywhere on the class members (methods, parameters, fields). When checking for class-level annotations (e.g. `@BotAdmin`, `@SecuredBot`, `@ChatType`), always call `ClassInfo.declaredAnnotation(DotName)` to avoid falsely inheriting annotations placed on methods.
 
+* **Optional Integrations in a Bean-Archive Runtime Jar**:
+  The runtime jar carries `META-INF/jandex.idx`, so ArC discovers every annotation-scoped class in it, including beans that need optional extensions (`TelegramBotHealthCheck` needs SmallRye Health, `TelegramBotMetrics` needs Micrometer). `AdditionalBeanBuildItem` alone is not enough to make them conditional.
+  * *Pattern*: produce `ExcludedTypeBuildItem` for the class when its capability (`Capability.SMALLRYE_HEALTH`, `io.quarkus.metrics`) is absent, and add it with `AdditionalBeanBuildItem.builder().addBeanClass(NAME).setUnremovable()` when present.
+  * *Quirk*: pass class names as strings. Class literals in the build step force the deployment classloader to load the bean, which fails with `NoClassDefFoundError` when the optional API is missing.
+
 * **Dynamic Classloading in Conversation Context**:
   When deserializing session payloads in `ConversationContextImpl`, do not use 1-arg `Class.forName()`. Use `Thread.currentThread().getContextClassLoader().loadClass()` so application-level record payloads are visible from the extension runtime jar.
 

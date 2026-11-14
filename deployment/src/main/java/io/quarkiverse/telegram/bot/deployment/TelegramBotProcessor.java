@@ -14,6 +14,7 @@ import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 
 import io.quarkiverse.telegram.bot.runtime.TelegramBotRecorder;
+import io.quarkiverse.telegram.bot.runtime.TelegramBotStatus;
 import io.quarkiverse.telegram.bot.runtime.api.AfterUpdate;
 import io.quarkiverse.telegram.bot.runtime.api.BeforeUpdate;
 import io.quarkiverse.telegram.bot.runtime.api.BotAdmin;
@@ -41,12 +42,16 @@ import io.quarkiverse.telegram.bot.runtime.session.InMemorySessionStore;
 import io.quarkiverse.telegram.bot.runtime.session.RedisSessionStore;
 import io.quarkiverse.telegram.bot.runtime.transport.PollingRunner;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.arc.deployment.ExcludedTypeBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeansRuntimeInitBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
+import io.quarkus.deployment.Capabilities;
+import io.quarkus.deployment.Capability;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Consume;
 import io.quarkus.deployment.annotations.ExecutionTime;
+import io.quarkus.deployment.annotations.Produce;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
@@ -56,6 +61,7 @@ import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigurationDefaultBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveMethodBuildItem;
+import io.quarkus.deployment.pkg.builditem.ArtifactResultBuildItem;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.vertx.http.deployment.BodyHandlerBuildItem;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
@@ -74,6 +80,9 @@ class TelegramBotProcessor {
     private static final DotName ON_CHOSEN_INLINE_RESULT = DotName.createSimple(OnChosenInlineResult.class.getName());
     private static final DotName ON_ERROR = DotName.createSimple(OnError.class.getName());
     private static final DotName TELEGRAM_EXCEPTION_HANDLER = DotName.createSimple(TelegramExceptionHandler.class.getName());
+    private static final String HEALTH_CHECK_CLASS = "io.quarkiverse.telegram.bot.runtime.health.TelegramBotHealthCheck";
+    private static final String METRICS_CLASS = "io.quarkiverse.telegram.bot.runtime.metrics.TelegramBotMetrics";
+
     private static final DotName SESSION_PAYLOAD = DotName.createSimple(SessionPayload.class.getName());
     private static final DotName CHAT_TYPE = DotName.createSimple(ChatType.class.getName());
     private static final DotName BOT_ADMIN = DotName.createSimple(BotAdmin.class.getName());
@@ -110,6 +119,36 @@ class TelegramBotProcessor {
         additionalBeans.produce(AdditionalBeanBuildItem.unremovableOf(InMemorySessionStore.class));
         additionalBeans.produce(AdditionalBeanBuildItem.unremovableOf(RedisSessionStore.class));
         additionalBeans.produce(AdditionalBeanBuildItem.unremovableOf(PollingRunner.class));
+        additionalBeans.produce(AdditionalBeanBuildItem.unremovableOf(TelegramBotStatus.class));
+    }
+
+    @BuildStep
+    void optionalIntegrationBeans(
+            Capabilities capabilities,
+            BuildProducer<AdditionalBeanBuildItem> additionalBeans,
+            BuildProducer<ExcludedTypeBuildItem> excludedTypes) {
+        // The runtime jar is a bean archive: keep the optional integrations out of discovery unless their extension is present.
+        // Class names are used instead of class literals so this step never loads classes that need the optional API.
+        boolean health = capabilities.isPresent(Capability.SMALLRYE_HEALTH);
+        boolean metrics = capabilities.isPresent("io.quarkus.metrics");
+        if (health) {
+            additionalBeans.produce(AdditionalBeanBuildItem.builder().addBeanClass(HEALTH_CHECK_CLASS).setUnremovable()
+                    .build());
+        } else {
+            excludedTypes.produce(new ExcludedTypeBuildItem(HEALTH_CHECK_CLASS));
+        }
+        if (metrics) {
+            additionalBeans.produce(AdditionalBeanBuildItem.builder().addBeanClass(METRICS_CLASS).setUnremovable().build());
+        } else {
+            excludedTypes.produce(new ExcludedTypeBuildItem(METRICS_CLASS));
+        }
+    }
+
+    @BuildStep
+    @Produce(ArtifactResultBuildItem.class)
+    void validateHandlers(CombinedIndexBuildItem index, List<HandlerBuildItem> handlers) {
+        HandlerValidator.validateSignatures(index.getIndex());
+        HandlerValidator.validateNoDuplicateCommands(handlers);
     }
 
     @BuildStep
@@ -478,6 +517,7 @@ class TelegramBotProcessor {
         }
 
         // Initialize transports (polling or webhook)
-        recorder.initTransports(dispatcher, launchMode.getLaunchMode(), botCommands, buildTimeConfig.webhook().path());
+        recorder.initTransports(dispatcher, launchMode.getLaunchMode(), botCommands, buildTimeConfig.webhook().path(),
+                buildTimeConfig.webhook().enabled());
     }
 }

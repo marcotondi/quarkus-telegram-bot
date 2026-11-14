@@ -25,6 +25,14 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-smallrye-health</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-micrometer-registry-prometheus</artifactId>
+        </dependency>
+        <dependency>
             <groupId>io.quarkiverse.telegram</groupId>
             <artifactId>quarkus-telegram-bot-test-framework</artifactId>
             <scope>test</scope>

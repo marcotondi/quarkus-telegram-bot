@@ -11,6 +11,7 @@ import jakarta.inject.Inject;
 
 import org.jboss.logging.Logger;
 
+import io.quarkiverse.telegram.bot.runtime.TelegramBotStatus;
 import io.quarkiverse.telegram.bot.runtime.client.TelegramBotClient;
 import io.quarkiverse.telegram.bot.runtime.config.TelegramBotConfig;
 import io.quarkiverse.telegram.bot.runtime.dispatcher.UpdateDispatcher;
@@ -27,15 +28,17 @@ public class PollingRunner {
 
     private final TelegramBotClient client;
     private final TelegramBotConfig config;
+    private final TelegramBotStatus status;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicLong lastUpdateId = new AtomicLong(0);
 
     private UpdateDispatcher dispatcher;
 
     @Inject
-    public PollingRunner(TelegramBotClient client, TelegramBotConfig config) {
+    public PollingRunner(TelegramBotClient client, TelegramBotConfig config, TelegramBotStatus status) {
         this.client = client;
         this.config = config;
+        this.status = status;
     }
 
     public void setDispatcher(UpdateDispatcher dispatcher) {
@@ -100,11 +103,13 @@ public class PollingRunner {
                 })
                 .subscribe().with(
                         v -> {
+                            status.clearError();
                             if (running.get()) {
                                 pollLoop();
                             }
                         },
                         error -> {
+                            status.setLastError("polling: " + error.getMessage());
                             LOG.errorf(error, "Error in Telegram polling loop: %s", error.getMessage());
                             if (running.get()) {
                                 // Wait 3 seconds and retry
@@ -137,6 +142,10 @@ public class PollingRunner {
             });
         }
         return chain;
+    }
+
+    public boolean isRunning() {
+        return running.get();
     }
 
     public synchronized void stop() {
