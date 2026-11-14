@@ -23,6 +23,10 @@ Questo documento raccoglie la roadmap delle funzionalità implementate e i requi
   - Modulo dedicato `test-framework` con simulatore fluent `ConversationSimulator` e server mock `TelegramBotTestResource`.
   - Suite espansa a **107 test** complessivi (22 test unitari in `codegen` e `runtime`, 84 integration test con WireMock e container reale).
   - Test live end-to-end con **DevServices & Redis** reale eseguito con successo tramite Podman rootless (`TelegramRedisDevServicesTest`).
+- ✅ **Milestone 10 — Quarkus Dev UI v2 (`/q/dev-ui`):**
+  - **Card Telegram Bot**: visualizzazione stato runtime con 5 indicatori (Bot Identity, Transport Mode, Token Status, Session Store, Webhook Route) alimentati dal servizio JsonRPC (`TelegramBotJsonRPCService`).
+  - **Tabella degli Handler**: catalogazione completa degli handler a build-time scansionati da Jandex (`qwc-data-table-page.js`) con tipo, pattern di match, chat type ammessi, sicurezza (ruoli/admin), stato FSM e descrizione.
+  - **Mappa FSM**: visualizzazione tabellare degli stati finiti (`@OnState`, `@OnStateMismatch`) e delle transizioni associate.
 
 ---
 
@@ -30,13 +34,13 @@ Questo documento raccoglie la roadmap delle funzionalità implementate e i requi
 
 Per dichiarare conclusa la **v1.0.0** e pronta per l'onboarding in Quarkiverse, sono pianificati i seguenti blocchi:
 
-### 1. Quarkus Dev UI v2 (`/q/dev-ui`) — *Priorità Alta (P1)*
+### 1. Quarkus Dev UI v2 (`/q/dev-ui`) — *Priorità Alta (P1)* [COMPLETATO]
 
 Fornire la console visuale di diagnostica per gli sviluppatori in modalità `quarkus dev`:
 
-- [ ] **Card Telegram Bot**:
-  - Stato identità del bot: Username, Bot ID, modalità attiva (`POLLING` vs `WEBHOOK`), webhook path, stato del token.
-- [ ] **Tabella degli Handler & Mappa FSM**:
+- [x] **Card Telegram Bot**:
+  - Stato identità del bot: Username, Bot ID, modalità attiva (`POLLING` vs `WEBHOOK`), webhook path, stato del token via JsonRPC (`TelegramBotJsonRPCService`).
+- [x] **Tabella degli Handler & Mappa FSM**:
   - Tabella completa degli handler scansionati da Jandex a build-time: comandi, callback query, messaggi tipizzati, query inline, gestori di errore ed intercettori.
   - Visualizzazione tabellare degli stati della macchina conversazionale (`@OnState`, `@OnStateMismatch`) e delle transizioni associate.
 
