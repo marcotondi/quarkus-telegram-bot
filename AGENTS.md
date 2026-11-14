@@ -52,8 +52,8 @@
 * **Model Codegen**:
   The 232 Telegram Bot API 8.x models (records & sealed interfaces) in `runtime/target/generated-sources/telegram` are generated during `runtime` compilation using `exec:java` invoking `TelegramModelGenerator`. If modifying OpenAPI schemas or codegen logic, re-install `codegen` first (`mvn install -pl codegen -DskipTests`).
 
-* **Offline / Pre-cached Plugin Trap**:
-  `parent` is pinned to `quarkiverse-parent:22`. Upgrading parent or maven plugins requires pre-cached artifacts in `~/.m2`; in sandbox/offline environments, never bump parent without checking whether new plugin jars (e.g. `maven-jar-plugin:3.5.1`, `maven-archiver:3.6.6`) are already present in the local cache.
+* **Parent Version & Build Plugins**:
+  `parent` is set to `quarkiverse-parent:26` (with `maven-jar-plugin:3.5.1` / `maven-archiver:3.6.6` cached in `~/.m2`). If bumping parent or adding plugins in restricted/offline environments, ensure plugin jars are cached locally or network access is permitted for initial download.
 
 ---
 
