@@ -14,10 +14,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.quarkiverse.telegram.bot.runtime.config.TelegramBotConfig;
 import io.quarkiverse.telegram.bot.runtime.model.AnswerCallbackQuery;
+import io.quarkiverse.telegram.bot.runtime.model.AnswerInlineQuery;
 import io.quarkiverse.telegram.bot.runtime.model.BotCommand;
 import io.quarkiverse.telegram.bot.runtime.model.EditMessageResult;
 import io.quarkiverse.telegram.bot.runtime.model.EditMessageText;
 import io.quarkiverse.telegram.bot.runtime.model.GetUpdatesRequest;
+import io.quarkiverse.telegram.bot.runtime.model.InlineQueryResult;
 import io.quarkiverse.telegram.bot.runtime.model.InputFile;
 import io.quarkiverse.telegram.bot.runtime.model.InputMedia;
 import io.quarkiverse.telegram.bot.runtime.model.Message;
@@ -134,6 +136,20 @@ public class TelegramBotClient {
 
     public Uni<Boolean> answerCallbackQuery(String callbackQueryId, String text, boolean showAlert) {
         return answerCallbackQuery(new AnswerCallbackQuery(callbackQueryId, text, showAlert));
+    }
+
+    // --- answerInlineQuery ---
+
+    public Uni<Boolean> answerInlineQuery(AnswerInlineQuery request) {
+        return extractResult(api.answerInlineQuery(token(), request));
+    }
+
+    public Uni<Boolean> answerInlineQuery(String inlineQueryId, List<InlineQueryResult> results) {
+        return answerInlineQuery(new AnswerInlineQuery(inlineQueryId, results));
+    }
+
+    public Uni<Boolean> answerInlineQuery(String inlineQueryId, InlineQueryResult... results) {
+        return answerInlineQuery(new AnswerInlineQuery(inlineQueryId, List.of(results)));
     }
 
     public Uni<Boolean> setMyCommands(List<BotCommand> commands) {

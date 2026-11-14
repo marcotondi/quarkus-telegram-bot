@@ -55,6 +55,12 @@ public class TelegramMockServer implements QuarkusTestResourceLifecycleManager {
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"ok\":true,\"result\":true}")));
 
+        // Stub answerInlineQuery
+        wireMockServer.stubFor(WireMock.post(WireMock.urlMatching("/bot.*/answerInlineQuery"))
+                .willReturn(WireMock.aResponse()
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"ok\":true,\"result\":true}")));
+
         // Stub setMyCommands
         wireMockServer.stubFor(WireMock.post(WireMock.urlMatching("/bot.*/setMyCommands"))
                 .willReturn(WireMock.aResponse()

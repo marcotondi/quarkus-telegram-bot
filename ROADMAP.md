@@ -75,9 +75,12 @@ Creare la console interattiva di sviluppo per l'estensione:
 ### 5. Inline Mode & Telegram Mini Apps (Web Apps)
 Supporto per casi d'uso avanzati:
 
-- [ ] **Inline Query Support**:
-  - Annotazione `@OnInlineQuery` per intercettare le ricerche inline (es. `@miobot ricerca`).
-  - Metodo `answerInlineQuery` nel client.
+- [x] **Inline Query Support**:
+  - Annotazione `@OnInlineQuery` con pattern matching e supporto wildcard (es. `@miobot search_*`).
+  - Annotazione `@OnChosenInlineResult` per tracciare il click/invio dei risultati da parte dell'utente.
+  - Metodo `answerInlineQuery` in `TelegramBotApi` e `TelegramBotClient`.
+  - Risoluzione automatica dei parametri (`InlineQuery`, `ChosenInlineResult`, `User`, `String` query).
+  - Gestione automatica del valore di ritorno (`List<InlineQueryResult>`, `InlineQueryResult`, `AnswerInlineQuery` o `Uni<?>`).
 - [ ] **Validazione Telegram Web App (Mini Apps)**:
   - Utility crittografica per validare a runtime l'hash `initData` generato da Telegram Web Apps (HMAC-SHA256 con bot token) conformemente alle specifiche di sicurezza Telegram.
 

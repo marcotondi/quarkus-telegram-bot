@@ -77,6 +77,14 @@ public interface TelegramBotApi {
     Uni<TelegramResponse<Boolean>> answerCallbackQuery(@PathParam("token") String token, AnswerCallbackQuery req);
 
     @POST
+    @Path("/answerInlineQuery")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    Uni<TelegramResponse<Boolean>> answerInlineQuery(
+            @PathParam("token") String token,
+            io.quarkiverse.telegram.bot.runtime.model.AnswerInlineQuery req);
+
+    @POST
     @Path("/setMyCommands")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)

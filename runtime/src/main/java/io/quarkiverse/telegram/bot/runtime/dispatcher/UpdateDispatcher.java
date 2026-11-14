@@ -13,10 +13,14 @@ import io.quarkiverse.telegram.bot.runtime.api.MessageType;
 import io.quarkiverse.telegram.bot.runtime.client.TelegramBotClient;
 import io.quarkiverse.telegram.bot.runtime.config.TelegramBotConfig;
 import io.quarkiverse.telegram.bot.runtime.model.AnswerCallbackQuery;
+import io.quarkiverse.telegram.bot.runtime.model.AnswerInlineQuery;
 import io.quarkiverse.telegram.bot.runtime.model.CallbackQuery;
 import io.quarkiverse.telegram.bot.runtime.model.Chat;
+import io.quarkiverse.telegram.bot.runtime.model.ChosenInlineResult;
 import io.quarkiverse.telegram.bot.runtime.model.EditMessageText;
 import io.quarkiverse.telegram.bot.runtime.model.InaccessibleMessage;
+import io.quarkiverse.telegram.bot.runtime.model.InlineQuery;
+import io.quarkiverse.telegram.bot.runtime.model.InlineQueryResult;
 import io.quarkiverse.telegram.bot.runtime.model.MaybeInaccessibleMessage;
 import io.quarkiverse.telegram.bot.runtime.model.Message;
 import io.quarkiverse.telegram.bot.runtime.model.SendMessage;
@@ -120,6 +124,33 @@ public class UpdateDispatcher {
     }
 
     private Uni<Void> processUpdate(Update update, SessionKey sessionKey, ConversationContextImpl ctx) {
+        InlineQuery inlineQuery = update.inlineQuery();
+        ChosenInlineResult chosenInlineResult = update.chosenInlineResult();
+
+        if (inlineQuery != null) {
+            for (HandlerDescriptor h : handlers) {
+                if (h.getType() == HandlerType.INLINE_QUERY) {
+                    MatchResult match = matchPattern(h.getMatchValue(), inlineQuery.query());
+                    if (match.matches()) {
+                        return invokeHandler(h, update, ctx, match.param());
+                    }
+                }
+            }
+            return Uni.createFrom().voidItem();
+        }
+
+        if (chosenInlineResult != null) {
+            for (HandlerDescriptor h : handlers) {
+                if (h.getType() == HandlerType.CHOSEN_INLINE_RESULT) {
+                    MatchResult match = matchPattern(h.getMatchValue(), chosenInlineResult.resultId());
+                    if (match.matches()) {
+                        return invokeHandler(h, update, ctx, match.param());
+                    }
+                }
+            }
+            return Uni.createFrom().voidItem();
+        }
+
         Message message = update.message();
         CallbackQuery callbackQuery = update.callbackQuery();
         String currentState = ctx != null ? ctx.currentState().orElse(null) : null;
@@ -278,6 +309,32 @@ public class UpdateDispatcher {
             }
             return client.answerCallbackQuery(answerCb).replaceWithVoid();
         }
+        if (result instanceof AnswerInlineQuery answerInline) {
+            if ((answerInline.inlineQueryId() == null || answerInline.inlineQueryId().isBlank())
+                    && update != null && update.inlineQuery() != null) {
+                answerInline = new AnswerInlineQuery(
+                        update.inlineQuery().id(),
+                        answerInline.results(),
+                        answerInline.cacheTime(),
+                        answerInline.isPersonal(),
+                        answerInline.nextOffset(),
+                        answerInline.button());
+            }
+            return client.answerInlineQuery(answerInline).replaceWithVoid();
+        }
+        if (result instanceof List<?> list && update != null && update.inlineQuery() != null) {
+            if (!list.isEmpty() && list.getFirst() instanceof InlineQueryResult) {
+                @SuppressWarnings("unchecked")
+                List<InlineQueryResult> results = (List<InlineQueryResult>) list;
+                return client.answerInlineQuery(new AnswerInlineQuery(update.inlineQuery().id(), results)).replaceWithVoid();
+            } else if (list.isEmpty()) {
+                return client.answerInlineQuery(new AnswerInlineQuery(update.inlineQuery().id(), List.of())).replaceWithVoid();
+            }
+        }
+        if (result instanceof InlineQueryResult singleResult && update != null && update.inlineQuery() != null) {
+            return client.answerInlineQuery(new AnswerInlineQuery(update.inlineQuery().id(), List.of(singleResult)))
+                    .replaceWithVoid();
+        }
         if (result instanceof SendMessage sendMessage) {
             Uni<Void> sendUni = client.sendMessage(sendMessage).replaceWithVoid();
             return dismissCallbackQueryAndPropagate(sendUni, update);
@@ -356,6 +413,10 @@ public class UpdateDispatcher {
             Class<?> pt = paramTypes[i];
             if (Update.class.isAssignableFrom(pt)) {
                 args[i] = update;
+            } else if (InlineQuery.class.isAssignableFrom(pt)) {
+                args[i] = update.inlineQuery();
+            } else if (ChosenInlineResult.class.isAssignableFrom(pt)) {
+                args[i] = update.chosenInlineResult();
             } else if (Message.class.isAssignableFrom(pt)) {
                 if (update.message() != null) {
                     args[i] = update.message();
@@ -379,7 +440,13 @@ public class UpdateDispatcher {
             } else if (ConversationContext.class.isAssignableFrom(pt)) {
                 args[i] = ctx;
             } else if (String.class.isAssignableFrom(pt)) {
-                args[i] = callbackParam;
+                if (update.inlineQuery() != null) {
+                    args[i] = callbackParam != null ? callbackParam : update.inlineQuery().query();
+                } else if (update.chosenInlineResult() != null) {
+                    args[i] = callbackParam != null ? callbackParam : update.chosenInlineResult().resultId();
+                } else {
+                    args[i] = callbackParam;
+                }
             } else if (ctx != null && ctx.data(pt).isPresent()) {
                 args[i] = ctx.data(pt).get();
             } else {
@@ -409,6 +476,12 @@ public class UpdateDispatcher {
         }
         if (update.callbackQuery() != null && update.callbackQuery().from() != null) {
             return update.callbackQuery().from();
+        }
+        if (update.inlineQuery() != null && update.inlineQuery().from() != null) {
+            return update.inlineQuery().from();
+        }
+        if (update.chosenInlineResult() != null && update.chosenInlineResult().from() != null) {
+            return update.chosenInlineResult().from();
         }
         return null;
     }

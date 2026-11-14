@@ -83,6 +83,18 @@ public class GreetingBot {
                 .replyMarkup(InlineKeyboard.of("Pagina successiva ➡️", "catalog_page_2"))
                 .build();
     }
+
+    @OnInlineQuery("search_*")
+    public List<InlineQueryResult> search(InlineQuery query, String queryText) {
+        return List.of(
+            InlineQueryResultArticle.builder()
+                .id("1")
+                .title("Cerca: " + queryText)
+                .type("article")
+                .inputMessageContent(new InputTextMessageContent("Risultato per: " + queryText, null, null, null))
+                .build()
+        );
+    }
 }
 ```
 

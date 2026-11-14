@@ -16,6 +16,8 @@ import org.jboss.logging.Logger;
 import io.quarkiverse.telegram.bot.runtime.TelegramBotRecorder;
 import io.quarkiverse.telegram.bot.runtime.api.MessageType;
 import io.quarkiverse.telegram.bot.runtime.api.OnCallbackQuery;
+import io.quarkiverse.telegram.bot.runtime.api.OnChosenInlineResult;
+import io.quarkiverse.telegram.bot.runtime.api.OnInlineQuery;
 import io.quarkiverse.telegram.bot.runtime.api.OnMessage;
 import io.quarkiverse.telegram.bot.runtime.api.OnState;
 import io.quarkiverse.telegram.bot.runtime.api.OnStateMismatch;
@@ -60,6 +62,8 @@ class TelegramBotProcessor {
     private static final DotName ON_MESSAGE = DotName.createSimple(OnMessage.class.getName());
     private static final DotName ON_STATE = DotName.createSimple(OnState.class.getName());
     private static final DotName ON_STATE_MISMATCH = DotName.createSimple(OnStateMismatch.class.getName());
+    private static final DotName ON_INLINE_QUERY = DotName.createSimple(OnInlineQuery.class.getName());
+    private static final DotName ON_CHOSEN_INLINE_RESULT = DotName.createSimple(OnChosenInlineResult.class.getName());
     private static final DotName SESSION_PAYLOAD = DotName.createSimple(SessionPayload.class.getName());
 
     @BuildStep
@@ -201,6 +205,42 @@ class TelegramBotProcessor {
                     extractParameterTypes(method),
                     false,
                     state.isEmpty() ? null : state,
+                    null)));
+        }
+
+        // Scan @OnInlineQuery
+        for (AnnotationInstance ann : index.getIndex().getAnnotations(ON_INLINE_QUERY)) {
+            MethodInfo method = ann.target().asMethod();
+            registerMethodAndClass(method, reflectiveMethods, reflectiveClasses);
+            botClasses.add(method.declaringClass().name().toString());
+
+            String pattern = ann.value() != null ? ann.value().asString() : "*";
+            handlers.produce(new HandlerBuildItem(new HandlerDescriptor(
+                    HandlerType.INLINE_QUERY,
+                    pattern,
+                    method.declaringClass().name().toString(),
+                    method.name(),
+                    extractParameterTypes(method),
+                    false,
+                    null,
+                    null)));
+        }
+
+        // Scan @OnChosenInlineResult
+        for (AnnotationInstance ann : index.getIndex().getAnnotations(ON_CHOSEN_INLINE_RESULT)) {
+            MethodInfo method = ann.target().asMethod();
+            registerMethodAndClass(method, reflectiveMethods, reflectiveClasses);
+            botClasses.add(method.declaringClass().name().toString());
+
+            String pattern = ann.value() != null ? ann.value().asString() : "*";
+            handlers.produce(new HandlerBuildItem(new HandlerDescriptor(
+                    HandlerType.CHOSEN_INLINE_RESULT,
+                    pattern,
+                    method.declaringClass().name().toString(),
+                    method.name(),
+                    extractParameterTypes(method),
+                    false,
+                    null,
                     null)));
         }
 

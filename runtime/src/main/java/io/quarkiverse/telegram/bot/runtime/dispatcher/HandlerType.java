@@ -4,5 +4,7 @@ public enum HandlerType {
     COMMAND,
     CALLBACK_QUERY,
     MESSAGE,
-    STATE_MISMATCH
+    STATE_MISMATCH,
+    INLINE_QUERY,
+    CHOSEN_INLINE_RESULT
 }

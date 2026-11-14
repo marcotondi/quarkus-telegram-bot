@@ -1,17 +1,27 @@
 package io.quarkiverse.telegram.bot.it;
 
+import java.util.List;
+
 import jakarta.enterprise.context.ApplicationScoped;
 
 import io.quarkiverse.telegram.bot.runtime.api.CallbackParam;
 import io.quarkiverse.telegram.bot.runtime.api.MessageType;
 import io.quarkiverse.telegram.bot.runtime.api.OnCallbackQuery;
+import io.quarkiverse.telegram.bot.runtime.api.OnChosenInlineResult;
+import io.quarkiverse.telegram.bot.runtime.api.OnInlineQuery;
 import io.quarkiverse.telegram.bot.runtime.api.OnMessage;
 import io.quarkiverse.telegram.bot.runtime.api.TelegramCommand;
 import io.quarkiverse.telegram.bot.runtime.model.AnswerCallbackQuery;
+import io.quarkiverse.telegram.bot.runtime.model.AnswerInlineQuery;
 import io.quarkiverse.telegram.bot.runtime.model.CallbackQuery;
 import io.quarkiverse.telegram.bot.runtime.model.Chat;
+import io.quarkiverse.telegram.bot.runtime.model.ChosenInlineResult;
 import io.quarkiverse.telegram.bot.runtime.model.EditMessageText;
 import io.quarkiverse.telegram.bot.runtime.model.InlineKeyboard;
+import io.quarkiverse.telegram.bot.runtime.model.InlineQuery;
+import io.quarkiverse.telegram.bot.runtime.model.InlineQueryResult;
+import io.quarkiverse.telegram.bot.runtime.model.InlineQueryResultArticle;
+import io.quarkiverse.telegram.bot.runtime.model.InputTextMessageContent;
 import io.quarkiverse.telegram.bot.runtime.model.Message;
 import io.quarkiverse.telegram.bot.runtime.model.SendMessage;
 import io.quarkiverse.telegram.bot.runtime.model.User;
@@ -78,5 +88,38 @@ public class SampleBot {
     @OnMessage(type = MessageType.TEXT)
     public String onTextMessage(Message message) {
         return "Text received: " + message.text();
+    }
+
+    public static final java.util.concurrent.atomic.AtomicReference<ChosenInlineResult> LAST_CHOSEN_RESULT = new java.util.concurrent.atomic.AtomicReference<>();
+
+    @OnInlineQuery("search_*")
+    public List<InlineQueryResult> onSearchInlineQuery(InlineQuery query, String queryText) {
+        return List.of(
+                InlineQueryResultArticle.builder()
+                        .id("search_1")
+                        .title("Search Result for " + queryText)
+                        .type("article")
+                        .inputMessageContent(new InputTextMessageContent("Found: " + queryText, null, null, null))
+                        .build());
+    }
+
+    @OnInlineQuery("custom_*")
+    public AnswerInlineQuery onCustomInlineQuery(InlineQuery query) {
+        return AnswerInlineQuery.builder()
+                .results(List.of(
+                        InlineQueryResultArticle.builder()
+                                .id("custom_1")
+                                .title("Custom: " + query.query())
+                                .type("article")
+                                .inputMessageContent(new InputTextMessageContent("Custom text", null, null, null))
+                                .build()))
+                .cacheTime(60)
+                .isPersonal(true)
+                .build();
+    }
+
+    @OnChosenInlineResult("*")
+    public void onChosenInlineResult(ChosenInlineResult chosen) {
+        LAST_CHOSEN_RESULT.set(chosen);
     }
 }
