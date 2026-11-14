@@ -27,7 +27,7 @@
         <dependency>
             <groupId>org.wiremock</groupId>
             <artifactId>wiremock</artifactId>
-            <version>3.12.1</version>
+            <version>3.13.2</version>
         </dependency>
     </dependencies>
 
@@ -36,7 +36,7 @@
             <plugin>
                 <groupId>io.smallrye</groupId>
                 <artifactId>jandex-maven-plugin</artifactId>
-                <version>3.2.2</version>
+                <version>3.6.1</version>
                 <executions>
                     <execution>
                         <id>make-index</id>
