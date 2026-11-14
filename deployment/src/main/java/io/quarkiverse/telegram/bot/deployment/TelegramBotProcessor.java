@@ -272,43 +272,11 @@ class TelegramBotProcessor {
             handlers.produce(new HandlerBuildItem(desc));
         }
 
-        // Scan @BeforeUpdate
-        for (AnnotationInstance ann : index.getIndex().getAnnotations(BEFORE_UPDATE)) {
-            MethodInfo method = ann.target().asMethod();
-            registerMethodAndClass(method, reflectiveMethods, reflectiveClasses);
-            botClasses.add(method.declaringClass().name().toString());
-
-            AnnotationValue priorityVal = ann.value("priority");
-            int priority = priorityVal != null ? priorityVal.asInt() : 0;
-
-            HandlerDescriptor desc = new HandlerDescriptor(
-                    HandlerType.BEFORE_UPDATE,
-                    null,
-                    method.declaringClass().name().toString(),
-                    method.name(),
-                    extractParameterTypes(method));
-            desc.setPriority(priority);
-            handlers.produce(new HandlerBuildItem(desc));
-        }
-
-        // Scan @AfterUpdate
-        for (AnnotationInstance ann : index.getIndex().getAnnotations(AFTER_UPDATE)) {
-            MethodInfo method = ann.target().asMethod();
-            registerMethodAndClass(method, reflectiveMethods, reflectiveClasses);
-            botClasses.add(method.declaringClass().name().toString());
-
-            AnnotationValue priorityVal = ann.value("priority");
-            int priority = priorityVal != null ? priorityVal.asInt() : 0;
-
-            HandlerDescriptor desc = new HandlerDescriptor(
-                    HandlerType.AFTER_UPDATE,
-                    null,
-                    method.declaringClass().name().toString(),
-                    method.name(),
-                    extractParameterTypes(method));
-            desc.setPriority(priority);
-            handlers.produce(new HandlerBuildItem(desc));
-        }
+        // Scan @BeforeUpdate & @AfterUpdate interceptors
+        scanInterceptors(index, BEFORE_UPDATE, HandlerType.BEFORE_UPDATE, reflectiveMethods, reflectiveClasses, botClasses,
+                handlers);
+        scanInterceptors(index, AFTER_UPDATE, HandlerType.AFTER_UPDATE, reflectiveMethods, reflectiveClasses, botClasses,
+                handlers);
 
         // Scan @OnError
         for (AnnotationInstance ann : index.getIndex().getAnnotations(ON_ERROR)) {
@@ -415,6 +383,33 @@ class TelegramBotProcessor {
             if (silentVal != null && silentVal.asBoolean()) {
                 descriptor.setSilentSecurity(true);
             }
+        }
+    }
+
+    private void scanInterceptors(
+            CombinedIndexBuildItem index,
+            DotName annotationName,
+            HandlerType handlerType,
+            BuildProducer<ReflectiveMethodBuildItem> reflectiveMethods,
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClasses,
+            Set<String> botClasses,
+            BuildProducer<HandlerBuildItem> handlers) {
+        for (AnnotationInstance ann : index.getIndex().getAnnotations(annotationName)) {
+            MethodInfo method = ann.target().asMethod();
+            registerMethodAndClass(method, reflectiveMethods, reflectiveClasses);
+            botClasses.add(method.declaringClass().name().toString());
+
+            AnnotationValue priorityVal = ann.value("priority");
+            int priority = priorityVal != null ? priorityVal.asInt() : 0;
+
+            HandlerDescriptor desc = new HandlerDescriptor(
+                    handlerType,
+                    null,
+                    method.declaringClass().name().toString(),
+                    method.name(),
+                    extractParameterTypes(method));
+            desc.setPriority(priority);
+            handlers.produce(new HandlerBuildItem(desc));
         }
     }
 

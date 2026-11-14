@@ -112,23 +112,7 @@ public class UpdateDispatcher {
         if (sessionKey == null) {
             AtomicReference<String> failingBeanClass = new AtomicReference<>();
             setupMdc(update);
-            return executeBeforeInterceptors(update, null)
-                    .flatMap(proceed -> {
-                        if (!proceed) {
-                            dismissCallbackQueryIfPresent(update);
-                            return executeAfterInterceptors(update, null, null);
-                        }
-                        return processUpdate(update, null, null, failingBeanClass)
-                                .onItemOrFailure().transformToUni((res, failure) -> {
-                                    return executeAfterInterceptors(update, null, failure)
-                                            .chain(() -> {
-                                                if (failure != null) {
-                                                    return handleError(failure, update, null, failingBeanClass.get());
-                                                }
-                                                return Uni.createFrom().voidItem();
-                                            });
-                                });
-                    })
+            return dispatchWithInterceptors(update, null, null, failingBeanClass)
                     .onTermination().invoke(this::clearMdc);
         }
 
@@ -163,29 +147,36 @@ public class UpdateDispatcher {
                                     sessionStore,
                                     client.objectMapper(),
                                     config.session().ttl());
-                            return executeBeforeInterceptors(update, ctx)
-                                    .flatMap(proceed -> {
-                                        if (!proceed) {
-                                            dismissCallbackQueryIfPresent(update);
-                                            return executeAfterInterceptors(update, ctx, null);
-                                        }
-                                        return processUpdate(update, sessionKey, ctx, failingBeanClass)
-                                                .flatMap(v -> persistContext(ctx))
-                                                .onItemOrFailure().transformToUni((res, failure) -> {
-                                                    return executeAfterInterceptors(update, ctx, failure)
-                                                            .chain(() -> {
-                                                                if (failure != null) {
-                                                                    return handleError(failure, update, ctx,
-                                                                            failingBeanClass.get());
-                                                                }
-                                                                return Uni.createFrom().voidItem();
-                                                            });
-                                                });
-                                    });
+                            return dispatchWithInterceptors(update, sessionKey, ctx, failingBeanClass);
                         }))
                 .onTermination().call(() -> {
                     clearMdc();
                     return sessionStore.releaseLock(sessionKey);
+                });
+    }
+
+    private Uni<Void> dispatchWithInterceptors(
+            Update update,
+            SessionKey sessionKey,
+            ConversationContextImpl ctx,
+            AtomicReference<String> failingBeanClass) {
+        return executeBeforeInterceptors(update, ctx)
+                .flatMap(proceed -> {
+                    if (!proceed) {
+                        dismissCallbackQueryIfPresent(update);
+                        return executeAfterInterceptors(update, ctx, null);
+                    }
+                    return processUpdate(update, sessionKey, ctx, failingBeanClass)
+                            .flatMap(v -> persistContext(ctx))
+                            .onItemOrFailure().transformToUni((res, failure) -> {
+                                return executeAfterInterceptors(update, ctx, failure)
+                                        .chain(() -> {
+                                            if (failure != null) {
+                                                return handleError(failure, update, ctx, failingBeanClass.get());
+                                            }
+                                            return Uni.createFrom().voidItem();
+                                        });
+                            });
                 });
     }
 
@@ -370,8 +361,7 @@ public class UpdateDispatcher {
             return Uni.createFrom().voidItem();
         }
 
-        Message message = update.message() != null ? update.message()
-                : (update.channelPost() != null ? update.channelPost() : null);
+        Message message = extractMessage(update);
         CallbackQuery callbackQuery = update.callbackQuery();
         String currentState = ctx != null ? ctx.currentState().orElse(null) : null;
 
@@ -806,12 +796,9 @@ public class UpdateDispatcher {
             } else if (ChosenInlineResult.class.isAssignableFrom(pt)) {
                 args[i] = update != null ? update.chosenInlineResult() : null;
             } else if (Message.class.isAssignableFrom(pt)) {
-                if (update != null && update.message() != null) {
-                    args[i] = update.message();
-                } else if (update != null && update.channelPost() != null) {
-                    args[i] = update.channelPost();
-                } else if (update != null && update.editedMessage() != null) {
-                    args[i] = update.editedMessage();
+                Message m = extractMessage(update);
+                if (m != null) {
+                    args[i] = m;
                 } else if (update != null && update.callbackQuery() != null
                         && update.callbackQuery().message() instanceof Message msg) {
                     args[i] = msg;
@@ -819,9 +806,9 @@ public class UpdateDispatcher {
                     args[i] = null;
                 }
             } else if (MaybeInaccessibleMessage.class.isAssignableFrom(pt)) {
-                args[i] = update != null && update.message() != null ? update.message()
-                        : (update != null && update.channelPost() != null ? update.channelPost()
-                                : (update != null && update.callbackQuery() != null ? update.callbackQuery().message() : null));
+                Message m = extractMessage(update);
+                args[i] = m != null ? m
+                        : (update != null && update.callbackQuery() != null ? update.callbackQuery().message() : null);
             } else if (CallbackQuery.class.isAssignableFrom(pt)) {
                 args[i] = update != null ? update.callbackQuery() : null;
             } else if (User.class.isAssignableFrom(pt)) {
@@ -977,8 +964,12 @@ public class UpdateDispatcher {
     }
 
     private User extractUser(Update update) {
-        if (update.message() != null && update.message().from() != null) {
-            return update.message().from();
+        if (update == null) {
+            return null;
+        }
+        Message m = extractMessage(update);
+        if (m != null && m.from() != null) {
+            return m.from();
         }
         if (update.callbackQuery() != null && update.callbackQuery().from() != null) {
             return update.callbackQuery().from();
@@ -989,38 +980,43 @@ public class UpdateDispatcher {
         if (update.chosenInlineResult() != null && update.chosenInlineResult().from() != null) {
             return update.chosenInlineResult().from();
         }
-        if (update.channelPost() != null && update.channelPost().from() != null) {
-            return update.channelPost().from();
-        }
-        if (update.editedMessage() != null && update.editedMessage().from() != null) {
-            return update.editedMessage().from();
-        }
-        if (update.editedChannelPost() != null && update.editedChannelPost().from() != null) {
-            return update.editedChannelPost().from();
-        }
         return null;
     }
 
     private Chat extractChat(Update update) {
-        if (update.message() != null) {
-            return update.message().chat();
+        if (update == null) {
+            return null;
         }
-        if (update.channelPost() != null) {
-            return update.channelPost().chat();
-        }
-        if (update.editedMessage() != null) {
-            return update.editedMessage().chat();
-        }
-        if (update.editedChannelPost() != null) {
-            return update.editedChannelPost().chat();
+        Message m = extractMessage(update);
+        if (m != null) {
+            return m.chat();
         }
         if (update.callbackQuery() != null && update.callbackQuery().message() != null) {
             MaybeInaccessibleMessage mim = update.callbackQuery().message();
-            if (mim instanceof Message m) {
-                return m.chat();
+            if (mim instanceof Message msg) {
+                return msg.chat();
             } else if (mim instanceof InaccessibleMessage im) {
                 return im.chat();
             }
+        }
+        return null;
+    }
+
+    private Message extractMessage(Update update) {
+        if (update == null) {
+            return null;
+        }
+        if (update.message() != null) {
+            return update.message();
+        }
+        if (update.channelPost() != null) {
+            return update.channelPost();
+        }
+        if (update.editedMessage() != null) {
+            return update.editedMessage();
+        }
+        if (update.editedChannelPost() != null) {
+            return update.editedChannelPost();
         }
         return null;
     }

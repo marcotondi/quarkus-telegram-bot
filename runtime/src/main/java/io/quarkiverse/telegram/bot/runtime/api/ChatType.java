@@ -35,17 +35,5 @@ public @interface ChatType {
         public String value() {
             return value;
         }
-
-        public static Type fromString(String str) {
-            if (str == null) {
-                return null;
-            }
-            for (Type t : values()) {
-                if (t.value.equalsIgnoreCase(str)) {
-                    return t;
-                }
-            }
-            return null;
-        }
     }
 }

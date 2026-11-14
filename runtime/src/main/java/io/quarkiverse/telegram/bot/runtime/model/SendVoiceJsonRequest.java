@@ -13,11 +13,7 @@ public record SendVoiceJsonRequest(
         @JsonProperty("parse_mode") String parseMode,
         @JsonProperty("reply_markup") ReplyMarkup replyMarkup) {
 
-    public SendVoiceJsonRequest(long chatId, String voice, String caption, ReplyMarkup replyMarkup) {
-        this((Object) chatId, voice, caption, null, replyMarkup);
-    }
-
-    public SendVoiceJsonRequest(String chatId, String voice, String caption, ReplyMarkup replyMarkup) {
-        this((Object) chatId, voice, caption, null, replyMarkup);
+    public SendVoiceJsonRequest(Object chatId, String voice, String caption, ReplyMarkup replyMarkup) {
+        this(chatId, voice, caption, null, replyMarkup);
     }
 }

@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
@@ -321,48 +322,46 @@ public class ConversationSimulator {
      * Asserts that the bot sent a message matching the given regex pattern.
      */
     public ConversationSimulator assertBotRepliedMatching(Pattern pattern) {
-        long deadline = System.currentTimeMillis() + timeout.toMillis();
-        WireMockServer server = support.getWireMockServer();
-
-        while (System.currentTimeMillis() < deadline) {
-            List<LoggedRequest> requests = getRequestsSinceAction("/bot.*/sendMessage");
-            for (LoggedRequest req : requests) {
-                SendMessage msg = parseSendMessage(req.getBodyAsString());
+        boolean matched = pollUntil(() -> {
+            for (LoggedRequest req : getRequestsSinceAction("/bot.*/sendMessage")) {
+                SendMessage msg = parseJson(req.getBodyAsString(), SendMessage.class);
                 if (msg != null && isForThisChat(msg.chatId()) && msg.text() != null
                         && pattern.matcher(msg.text()).matches()) {
                     this.lastSentMessage = msg;
-                    return this;
+                    return true;
                 }
             }
-            sleep(50);
-        }
+            return false;
+        });
 
-        List<String> receivedTexts = getReceivedMessageTextsSinceAction();
-        throw new AssertionError(String.format(
-                "Expected bot to reply with text matching pattern '%s' for chat %s, but received: %s",
-                pattern.pattern(), chat.id(), receivedTexts));
+        if (!matched) {
+            throw new AssertionError(String.format(
+                    "Expected bot to reply with text matching pattern '%s' for chat %s, but received: %s",
+                    pattern.pattern(), chat.id(), getReceivedMessageTextsSinceAction()));
+        }
+        return this;
     }
 
     /**
      * Runs custom consumer assertions against the last sent {@link SendMessage}.
      */
     public ConversationSimulator assertBotRepliedWith(Consumer<SendMessage> assertions) {
-        long deadline = System.currentTimeMillis() + timeout.toMillis();
-
-        while (System.currentTimeMillis() < deadline) {
-            List<LoggedRequest> requests = getRequestsSinceAction("/bot.*/sendMessage");
-            for (LoggedRequest req : requests) {
-                SendMessage msg = parseSendMessage(req.getBodyAsString());
+        boolean matched = pollUntil(() -> {
+            for (LoggedRequest req : getRequestsSinceAction("/bot.*/sendMessage")) {
+                SendMessage msg = parseJson(req.getBodyAsString(), SendMessage.class);
                 if (msg != null && isForThisChat(msg.chatId())) {
                     this.lastSentMessage = msg;
                     assertions.accept(msg);
-                    return this;
+                    return true;
                 }
             }
-            sleep(50);
-        }
+            return false;
+        });
 
-        throw new AssertionError("No message sent to chat " + chat.id() + " within timeout " + timeout.toMillis() + " ms");
+        if (!matched) {
+            throw new AssertionError("No message sent to chat " + chat.id() + " within timeout " + timeout.toMillis() + " ms");
+        }
+        return this;
     }
 
     /**
@@ -441,22 +440,22 @@ public class ConversationSimulator {
      * Runs custom consumer assertions against the last edited {@link EditMessageText}.
      */
     public ConversationSimulator assertMessageEditedWith(Consumer<EditMessageText> assertions) {
-        long deadline = System.currentTimeMillis() + timeout.toMillis();
-
-        while (System.currentTimeMillis() < deadline) {
-            List<LoggedRequest> requests = getRequestsSinceAction("/bot.*/editMessageText");
-            for (LoggedRequest req : requests) {
-                EditMessageText edit = parseEditMessageText(req.getBodyAsString());
+        boolean matched = pollUntil(() -> {
+            for (LoggedRequest req : getRequestsSinceAction("/bot.*/editMessageText")) {
+                EditMessageText edit = parseJson(req.getBodyAsString(), EditMessageText.class);
                 if (edit != null && (edit.chatId() == null || isForThisChat(edit.chatId()))) {
                     this.lastEditedMessage = edit;
                     assertions.accept(edit);
-                    return this;
+                    return true;
                 }
             }
-            sleep(50);
-        }
+            return false;
+        });
 
-        throw new AssertionError("No editMessageText request found for chat " + chat.id() + " within timeout");
+        if (!matched) {
+            throw new AssertionError("No editMessageText request found for chat " + chat.id() + " within timeout");
+        }
+        return this;
     }
 
     /**
@@ -470,26 +469,24 @@ public class ConversationSimulator {
      * Asserts that answerCallbackQuery was called with alert or notification text containing expectedText.
      */
     public ConversationSimulator assertCallbackAnswered(String expectedText) {
-        long deadline = System.currentTimeMillis() + timeout.toMillis();
-
-        while (System.currentTimeMillis() < deadline) {
-            List<LoggedRequest> requests = getRequestsSinceAction("/bot.*/answerCallbackQuery");
-            for (LoggedRequest req : requests) {
-                AnswerCallbackQuery answer = parseAnswerCallbackQuery(req.getBodyAsString());
-                if (answer != null) {
-                    if (expectedText == null
-                            || (answer.text() != null && answer.text().contains(expectedText))) {
-                        this.lastAnswerCallbackQuery = answer;
-                        return this;
-                    }
+        boolean matched = pollUntil(() -> {
+            for (LoggedRequest req : getRequestsSinceAction("/bot.*/answerCallbackQuery")) {
+                AnswerCallbackQuery answer = parseJson(req.getBodyAsString(), AnswerCallbackQuery.class);
+                if (answer != null && (expectedText == null
+                        || (answer.text() != null && answer.text().contains(expectedText)))) {
+                    this.lastAnswerCallbackQuery = answer;
+                    return true;
                 }
             }
-            sleep(50);
-        }
+            return false;
+        });
 
-        throw new AssertionError("Expected answerCallbackQuery "
-                + (expectedText != null ? "with text containing '" + expectedText + "' " : "")
-                + "within timeout " + timeout.toMillis() + " ms");
+        if (!matched) {
+            throw new AssertionError("Expected answerCallbackQuery "
+                    + (expectedText != null ? "with text containing '" + expectedText + "' " : "")
+                    + "within timeout " + timeout.toMillis() + " ms");
+        }
+        return this;
     }
 
     /**
@@ -503,26 +500,24 @@ public class ConversationSimulator {
      * Asserts that answerInlineQuery was called with expected number of results.
      */
     public ConversationSimulator assertInlineQueryAnswered(Integer expectedResultCount) {
-        long deadline = System.currentTimeMillis() + timeout.toMillis();
-
-        while (System.currentTimeMillis() < deadline) {
-            List<LoggedRequest> requests = getRequestsSinceAction("/bot.*/answerInlineQuery");
-            for (LoggedRequest req : requests) {
+        boolean matched = pollUntil(() -> {
+            for (LoggedRequest req : getRequestsSinceAction("/bot.*/answerInlineQuery")) {
                 AnswerInlineQuery answer = parseAnswerInlineQuery(req.getBodyAsString());
-                if (answer != null) {
-                    if (expectedResultCount == null
-                            || (answer.results() != null && answer.results().size() == expectedResultCount)) {
-                        this.lastAnswerInlineQuery = answer;
-                        return this;
-                    }
+                if (answer != null && (expectedResultCount == null
+                        || (answer.results() != null && answer.results().size() == expectedResultCount))) {
+                    this.lastAnswerInlineQuery = answer;
+                    return true;
                 }
             }
-            sleep(50);
-        }
+            return false;
+        });
 
-        throw new AssertionError("Expected answerInlineQuery "
-                + (expectedResultCount != null ? "with " + expectedResultCount + " results " : "")
-                + "within timeout");
+        if (!matched) {
+            throw new AssertionError("Expected answerInlineQuery "
+                    + (expectedResultCount != null ? "with " + expectedResultCount + " results " : "")
+                    + "within timeout");
+        }
+        return this;
     }
 
     /**
@@ -532,7 +527,7 @@ public class ConversationSimulator {
         sleep(100);
         List<LoggedRequest> requests = getRequestsSinceAction("/bot.*/sendMessage");
         for (LoggedRequest req : requests) {
-            SendMessage msg = parseSendMessage(req.getBodyAsString());
+            SendMessage msg = parseJson(req.getBodyAsString(), SendMessage.class);
             if (msg != null && isForThisChat(msg.chatId())) {
                 throw new AssertionError("Expected no sendMessage to chat " + chat.id() + ", but found: " + msg.text());
             }
@@ -563,21 +558,19 @@ public class ConversationSimulator {
      * Low-level WireMock verification helper with retry.
      */
     public ConversationSimulator assertSent(RequestPatternBuilder pattern) {
-        long deadline = System.currentTimeMillis() + timeout.toMillis();
         WireMockServer server = support.getWireMockServer();
-        AssertionError lastErr = null;
-
-        while (System.currentTimeMillis() < deadline) {
+        AssertionError[] lastErr = new AssertionError[1];
+        boolean matched = pollUntil(() -> {
             try {
                 server.verify(pattern);
-                return this;
+                return true;
             } catch (AssertionError e) {
-                lastErr = e;
-                sleep(50);
+                lastErr[0] = e;
+                return false;
             }
-        }
-        if (lastErr != null) {
-            throw lastErr;
+        });
+        if (!matched && lastErr[0] != null) {
+            throw lastErr[0];
         }
         return this;
     }
@@ -604,7 +597,7 @@ public class ConversationSimulator {
         List<SendMessage> list = new ArrayList<>();
         List<LoggedRequest> requests = getRequestsSinceAction("/bot.*/sendMessage");
         for (LoggedRequest req : requests) {
-            SendMessage msg = parseSendMessage(req.getBodyAsString());
+            SendMessage msg = parseJson(req.getBodyAsString(), SendMessage.class);
             if (msg != null && isForThisChat(msg.chatId())) {
                 list.add(msg);
             }
@@ -616,7 +609,7 @@ public class ConversationSimulator {
         List<EditMessageText> list = new ArrayList<>();
         List<LoggedRequest> requests = getRequestsSinceAction("/bot.*/editMessageText");
         for (LoggedRequest req : requests) {
-            EditMessageText edit = parseEditMessageText(req.getBodyAsString());
+            EditMessageText edit = parseJson(req.getBodyAsString(), EditMessageText.class);
             if (edit != null && (edit.chatId() == null || isForThisChat(edit.chatId()))) {
                 list.add(edit);
             }
@@ -633,70 +626,79 @@ public class ConversationSimulator {
 
     // --- Internal Helpers ---
 
-    private ConversationSimulator assertBotRepliedInternal(String expected, boolean exact) {
+    private boolean pollUntil(BooleanSupplier condition) {
         long deadline = System.currentTimeMillis() + timeout.toMillis();
-
         while (System.currentTimeMillis() < deadline) {
-            List<LoggedRequest> requests = getRequestsSinceAction("/bot.*/sendMessage");
-            for (LoggedRequest req : requests) {
-                SendMessage msg = parseSendMessage(req.getBodyAsString());
+            if (condition.getAsBoolean()) {
+                return true;
+            }
+            sleep(50);
+        }
+        return false;
+    }
+
+    private ConversationSimulator assertBotRepliedInternal(String expected, boolean exact) {
+        boolean matched = pollUntil(() -> {
+            for (LoggedRequest req : getRequestsSinceAction("/bot.*/sendMessage")) {
+                SendMessage msg = parseJson(req.getBodyAsString(), SendMessage.class);
                 if (msg != null && isForThisChat(msg.chatId()) && msg.text() != null) {
                     boolean matches = exact ? msg.text().equals(expected) : msg.text().contains(expected);
                     if (matches) {
                         this.lastSentMessage = msg;
-                        return this;
+                        return true;
                     }
                 }
             }
-            sleep(50);
-        }
+            return false;
+        });
 
-        List<String> received = getReceivedMessageTextsSinceAction();
-        throw new AssertionError(String.format(
-                "Expected bot to reply with text %s '%s' for chat %s within %d ms, but received: %s",
-                exact ? "equal to" : "containing", expected, chat.id(), timeout.toMillis(), received));
+        if (!matched) {
+            throw new AssertionError(String.format(
+                    "Expected bot to reply with text %s '%s' for chat %s within %d ms, but received: %s",
+                    exact ? "equal to" : "containing", expected, chat.id(), timeout.toMillis(),
+                    getReceivedMessageTextsSinceAction()));
+        }
+        return this;
     }
 
     private ConversationSimulator assertMessageEditedInternal(String expectedSubstring, boolean exact) {
-        long deadline = System.currentTimeMillis() + timeout.toMillis();
-
-        while (System.currentTimeMillis() < deadline) {
-            List<LoggedRequest> editTexts = getRequestsSinceAction("/bot.*/editMessageText");
-            for (LoggedRequest req : editTexts) {
-                EditMessageText edit = parseEditMessageText(req.getBodyAsString());
+        boolean matched = pollUntil(() -> {
+            for (LoggedRequest req : getRequestsSinceAction("/bot.*/editMessageText")) {
+                EditMessageText edit = parseJson(req.getBodyAsString(), EditMessageText.class);
                 if (edit != null && (edit.chatId() == null || isForThisChat(edit.chatId()))) {
                     if (expectedSubstring == null) {
                         this.lastEditedMessage = edit;
-                        return this;
+                        return true;
                     }
                     if (edit.text() != null) {
                         boolean matches = exact ? edit.text().equals(expectedSubstring)
                                 : edit.text().contains(expectedSubstring);
                         if (matches) {
                             this.lastEditedMessage = edit;
-                            return this;
+                            return true;
                         }
                     }
                 }
             }
 
             if (expectedSubstring == null) {
-                List<LoggedRequest> editMarkups = getRequestsSinceAction("/bot.*/editMessageReplyMarkup");
-                for (LoggedRequest req : editMarkups) {
-                    EditMessageReplyMarkup markup = parseEditMessageReplyMarkup(req.getBodyAsString());
+                for (LoggedRequest req : getRequestsSinceAction("/bot.*/editMessageReplyMarkup")) {
+                    EditMessageReplyMarkup markup = parseJson(req.getBodyAsString(), EditMessageReplyMarkup.class);
                     if (markup != null && (markup.chatId() == null || isForThisChat(markup.chatId()))) {
-                        return this;
+                        return true;
                     }
                 }
             }
+            return false;
+        });
 
-            sleep(50);
+        if (!matched) {
+            throw new AssertionError(String.format(
+                    "Expected message to be edited %sfor chat %s within %d ms, but none was received",
+                    expectedSubstring != null ? "with text containing '" + expectedSubstring + "' " : "",
+                    chat.id(), timeout.toMillis()));
         }
-
-        throw new AssertionError(String.format(
-                "Expected message to be edited %sfor chat %s within %d ms, but none was received",
-                expectedSubstring != null ? "with text containing '" + expectedSubstring + "' " : "",
-                chat.id(), timeout.toMillis()));
+        return this;
     }
 
     private boolean isForThisChat(Object targetChatId) {
@@ -711,8 +713,14 @@ public class ConversationSimulator {
         if (server == null) {
             return List.of();
         }
-        List<LoggedRequest> all = server.findAll(WireMock.postRequestedFor(WireMock.urlMatching(urlPattern)));
-        return all;
+        List<LoggedRequest> all = server.findAll(WireMock.postRequestedFor(WireMock.urlMatching("/bot.*")));
+        int startIndex = Math.min(actionRequestIndex, all.size());
+        List<LoggedRequest> newRequests = all.subList(startIndex, all.size());
+        Pattern pattern = Pattern.compile(urlPattern);
+        return newRequests.stream()
+                .filter(req -> pattern.matcher(req.getUrl()).matches()
+                        || req.getUrl().contains(urlPattern.replace("/bot.*/", "")))
+                .toList();
     }
 
     private int getTotalWireMockRequestsCount() {
@@ -726,7 +734,7 @@ public class ConversationSimulator {
     private List<String> getReceivedMessageTextsSinceAction() {
         List<String> texts = new ArrayList<>();
         for (LoggedRequest req : getRequestsSinceAction("/bot.*/sendMessage")) {
-            SendMessage msg = parseSendMessage(req.getBodyAsString());
+            SendMessage msg = parseJson(req.getBodyAsString(), SendMessage.class);
             if (msg != null && isForThisChat(msg.chatId())) {
                 texts.add(msg.text());
             }
@@ -734,33 +742,9 @@ public class ConversationSimulator {
         return texts;
     }
 
-    private SendMessage parseSendMessage(String json) {
+    private <T> T parseJson(String json, Class<T> clazz) {
         try {
-            return support.getObjectMapper().readValue(json, SendMessage.class);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private EditMessageText parseEditMessageText(String json) {
-        try {
-            return support.getObjectMapper().readValue(json, EditMessageText.class);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private EditMessageReplyMarkup parseEditMessageReplyMarkup(String json) {
-        try {
-            return support.getObjectMapper().readValue(json, EditMessageReplyMarkup.class);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private AnswerCallbackQuery parseAnswerCallbackQuery(String json) {
-        try {
-            return support.getObjectMapper().readValue(json, AnswerCallbackQuery.class);
+            return support.getObjectMapper().readValue(json, clazz);
         } catch (Exception e) {
             return null;
         }

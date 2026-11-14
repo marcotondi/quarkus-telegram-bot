@@ -13,11 +13,7 @@ public record SendAnimationJsonRequest(
         @JsonProperty("parse_mode") String parseMode,
         @JsonProperty("reply_markup") ReplyMarkup replyMarkup) {
 
-    public SendAnimationJsonRequest(long chatId, String animation, String caption, ReplyMarkup replyMarkup) {
-        this((Object) chatId, animation, caption, null, replyMarkup);
-    }
-
-    public SendAnimationJsonRequest(String chatId, String animation, String caption, ReplyMarkup replyMarkup) {
-        this((Object) chatId, animation, caption, null, replyMarkup);
+    public SendAnimationJsonRequest(Object chatId, String animation, String caption, ReplyMarkup replyMarkup) {
+        this(chatId, animation, caption, null, replyMarkup);
     }
 }

@@ -404,25 +404,7 @@ public class TelegramBotClient {
     }
 
     public Uni<Message> sendVideo(long chatId, InputFile video, String caption, ReplyMarkup markup) {
-        return switch (video) {
-            case InputFile.FileId(var id) -> extractResult(api.sendVideoJson(
-                    token(), new SendVideoJsonRequest(chatId, id, caption, markup)));
-
-            case InputFile.Url(var url) -> extractResult(api.sendVideoJson(
-                    token(), new SendVideoJsonRequest(chatId, url, caption, markup)));
-
-            case InputFile.BinaryPath(var path, var fileName, var contentType) -> {
-                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
-                        .binaryFileUpload("video", fileName, path.toAbsolutePath().toString(), contentType);
-                yield extractMultipartResult(api.sendVideoMultipart(token(), form));
-            }
-
-            case InputFile.BinaryBytes(var bytes, var fileName, var contentType) -> {
-                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
-                        .binaryFileUpload("video", fileName, Buffer.buffer(bytes), contentType);
-                yield extractMultipartResult(api.sendVideoMultipart(token(), form));
-            }
-        };
+        return sendVideoInternal(chatId, video, caption, markup);
     }
 
     public Uni<Message> sendVideo(String chatId, InputFile video) {
@@ -434,6 +416,10 @@ public class TelegramBotClient {
     }
 
     public Uni<Message> sendVideo(String chatId, InputFile video, String caption, ReplyMarkup markup) {
+        return sendVideoInternal(chatId, video, caption, markup);
+    }
+
+    private Uni<Message> sendVideoInternal(Object chatId, InputFile video, String caption, ReplyMarkup markup) {
         return switch (video) {
             case InputFile.FileId(var id) -> extractResult(api.sendVideoJson(
                     token(), new SendVideoJsonRequest(chatId, id, caption, markup)));
@@ -466,25 +452,7 @@ public class TelegramBotClient {
     }
 
     public Uni<Message> sendAnimation(long chatId, InputFile animation, String caption, ReplyMarkup markup) {
-        return switch (animation) {
-            case InputFile.FileId(var id) -> extractResult(api.sendAnimationJson(
-                    token(), new SendAnimationJsonRequest(chatId, id, caption, markup)));
-
-            case InputFile.Url(var url) -> extractResult(api.sendAnimationJson(
-                    token(), new SendAnimationJsonRequest(chatId, url, caption, markup)));
-
-            case InputFile.BinaryPath(var path, var fileName, var contentType) -> {
-                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
-                        .binaryFileUpload("animation", fileName, path.toAbsolutePath().toString(), contentType);
-                yield extractMultipartResult(api.sendAnimationMultipart(token(), form));
-            }
-
-            case InputFile.BinaryBytes(var bytes, var fileName, var contentType) -> {
-                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
-                        .binaryFileUpload("animation", fileName, Buffer.buffer(bytes), contentType);
-                yield extractMultipartResult(api.sendAnimationMultipart(token(), form));
-            }
-        };
+        return sendAnimationInternal(chatId, animation, caption, markup);
     }
 
     public Uni<Message> sendAnimation(String chatId, InputFile animation) {
@@ -496,6 +464,10 @@ public class TelegramBotClient {
     }
 
     public Uni<Message> sendAnimation(String chatId, InputFile animation, String caption, ReplyMarkup markup) {
+        return sendAnimationInternal(chatId, animation, caption, markup);
+    }
+
+    private Uni<Message> sendAnimationInternal(Object chatId, InputFile animation, String caption, ReplyMarkup markup) {
         return switch (animation) {
             case InputFile.FileId(var id) -> extractResult(api.sendAnimationJson(
                     token(), new SendAnimationJsonRequest(chatId, id, caption, markup)));
@@ -528,25 +500,7 @@ public class TelegramBotClient {
     }
 
     public Uni<Message> sendVoice(long chatId, InputFile voice, String caption, ReplyMarkup markup) {
-        return switch (voice) {
-            case InputFile.FileId(var id) -> extractResult(api.sendVoiceJson(
-                    token(), new SendVoiceJsonRequest(chatId, id, caption, markup)));
-
-            case InputFile.Url(var url) -> extractResult(api.sendVoiceJson(
-                    token(), new SendVoiceJsonRequest(chatId, url, caption, markup)));
-
-            case InputFile.BinaryPath(var path, var fileName, var contentType) -> {
-                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
-                        .binaryFileUpload("voice", fileName, path.toAbsolutePath().toString(), contentType);
-                yield extractMultipartResult(api.sendVoiceMultipart(token(), form));
-            }
-
-            case InputFile.BinaryBytes(var bytes, var fileName, var contentType) -> {
-                ClientMultipartForm form = baseMultipart(chatId, caption, markup)
-                        .binaryFileUpload("voice", fileName, Buffer.buffer(bytes), contentType);
-                yield extractMultipartResult(api.sendVoiceMultipart(token(), form));
-            }
-        };
+        return sendVoiceInternal(chatId, voice, caption, markup);
     }
 
     public Uni<Message> sendVoice(String chatId, InputFile voice) {
@@ -558,6 +512,10 @@ public class TelegramBotClient {
     }
 
     public Uni<Message> sendVoice(String chatId, InputFile voice, String caption, ReplyMarkup markup) {
+        return sendVoiceInternal(chatId, voice, caption, markup);
+    }
+
+    private Uni<Message> sendVoiceInternal(Object chatId, InputFile voice, String caption, ReplyMarkup markup) {
         return switch (voice) {
             case InputFile.FileId(var id) -> extractResult(api.sendVoiceJson(
                     token(), new SendVoiceJsonRequest(chatId, id, caption, markup)));
